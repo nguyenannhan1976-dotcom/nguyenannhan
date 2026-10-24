@@ -313,7 +313,8 @@ function getGeminiClient(): GoogleGenAI {
 
 async function callGemini(
   contents: any,
-  systemInstruction?: string
+  systemInstruction?: string,
+  extraConfig?: any
 ): Promise<{ text: string; modelUsed: string }> {
   const keyCheck = checkGeminiApiKey();
   if (!keyCheck.valid) {
@@ -328,6 +329,7 @@ async function callGemini(
       console.log(`[Gemini] Calling model: ${model}`);
       const config: any = {
         temperature: 0.7,
+        ...extraConfig,
       };
       if (systemInstruction) {
         config.systemInstruction = systemInstruction;
@@ -755,42 +757,116 @@ Hãy trình bày rõ ràng, mạch lạc, dễ đọc bằng tiếng Việt.`;
   }
 });
 
-// 3. Generate suggestions
+function getSmartFallbackSuggestions(lessonText: string) {
+  const lower = (lessonText || "").toLowerCase();
+  
+  if (lower.includes("toán") || lower.includes("phương trình") || lower.includes("mệnh đề") || lower.includes("tập hợp") || lower.includes("số") || lower.includes("hình")) {
+    return [
+      {
+        loai: "Trắc nghiệm Tính Nhanh",
+        moTa: "Thử thách trắc nghiệm 4 phương án tương tác nhanh, giải thích chi tiết từng bước tính toán bám sát SGK.",
+        doKho: "Dễ",
+        thoiGian: "5 phút",
+        icon: "⚡",
+        mauSac: "from-amber-400 to-orange-500",
+      },
+      {
+        loai: "Nối Cặp Định Lý & Mệnh Đề",
+        moTa: "Nối các biểu thức, khái niệm và công thức tương ứng ở hai cột bằng cơ chế Click-to-Pair mượt mà 60 FPS.",
+        doKho: "Trung bình",
+        thoiGian: "7 phút",
+        icon: "🗂️",
+        mauSac: "from-emerald-400 to-teal-500",
+      },
+      {
+        loai: "Đúng hay Sai Thử Thách",
+        moTa: "Phân tích các nhận định toán học, bấm Đúng hoặc Sai trong 1 chạm kèm gợi ý lời giải khắc sâu kiến thức.",
+        doKho: "Dễ",
+        thoiGian: "4 phút",
+        icon: "⚖️",
+        mauSac: "from-indigo-500 to-purple-600",
+      },
+    ];
+  }
+
+  return [
+    {
+      loai: "Trắc nghiệm Vui Nhộn",
+      moTa: "Hệ thống câu hỏi trắc nghiệm 4 lựa chọn sinh động, màu sắc tươi vui kèm âm thanh chúc mừng.",
+      doKho: "Dễ",
+      thoiGian: "5 phút",
+      icon: "🎯",
+      mauSac: "from-indigo-500 to-purple-600",
+    },
+    {
+      loai: "Nối Cặp Thuật Ngữ SGK",
+      moTa: "Ghép đôi các cặp thẻ từ khóa, định nghĩa và bài tập tương ứng, rèn luyện tư duy phản xạ nhanh.",
+      doKho: "Trung bình",
+      thoiGian: "6 phút",
+      icon: "🧩",
+      mauSac: "from-emerald-400 to-teal-500",
+    },
+    {
+      loai: "Đúng hay Sai & Khám Phá",
+      moTa: "Đọc nhận định từ bài học SGK và đưa ra quyết định Đúng / Sai, kèm lời giải thích chi tiết cho từng câu.",
+      doKho: "Dễ",
+      thoiGian: "4 phút",
+      icon: "⚖️",
+      mauSac: "from-amber-400 to-rose-500",
+    },
+  ];
+}
+
+// 3. Generate suggestions (Fail-proof)
 app.post("/api/generate-suggestions", async (req, res) => {
   try {
     const { lessonText } = req.body;
-    if (!lessonText) {
+    if (!lessonText || !lessonText.trim()) {
       return res.status(400).json({ error: "Thiếu nội dung giáo án" });
     }
 
-    const prompt = `Dựa vào nội dung giáo án và các câu hỏi đã trích xuất bên dưới, hãy đề xuất 3 loại mini game giáo dục (HTML5) phù hợp nhất.
-Điền đầy đủ thông tin vào JSON array (gồm đúng 3 object).
-Mỗi object chứa cấu trúc sau:
-{
-  "loai": string,
-  "moTa": string,
-  "doKho": "Dễ" | "Trung bình" | "Khó",
-  "thoiGian": string,
-  "icon": string (1 emoji),
-  "mauSac": string (vd: "from-emerald-400 to-teal-500")
-}
+    const trimmedLesson = lessonText.trim().substring(0, 3500);
 
-Một số loại game gợi ý: Trắc nghiệm, Đúng/Sai, Nối ý, Flashcard, Điền vào chỗ trống, Sắp xếp thứ tự, Phân loại...
-CHÚ Ý QUAN TRỌNG: Bắt buộc CHỈ trả về đúng 1 JSON array hợp lệ, không bọc trong markdown \`\`\`json ... \`\`\`, không có bất kỳ văn bản giải thích nào khác.
+    const prompt = `Dựa vào nội dung giáo án và các câu hỏi đã trích xuất bên dưới, hãy đề xuất 3 loại mini game giáo dục (HTML5) phù hợp nhất.
+Trả về đúng 1 JSON array gồm đúng 3 object với cấu trúc:
+[
+  {
+    "loai": "Tên loại game (vd: Trắc nghiệm, Nối cặp, Đúng/Sai, Điền từ...)",
+    "moTa": "Mô tả ngắn gọn cách chơi hấp dẫn bám sát nội dung bài học (1-2 câu)",
+    "doKho": "Dễ" | "Trung bình" | "Khó",
+    "thoiGian": "4 phút" | "5 phút" | "7 phút",
+    "icon": "1 emoji phù hợp",
+    "mauSac": "from-amber-400 to-orange-500" hoặc "from-emerald-400 to-teal-500" hoặc "from-indigo-500 to-purple-600"
+  }
+]
+
+BẮT BUỘC CHỈ TRẢ VỀ JSON ARRAY HỢP LỆ, KHÔNG BỌC TRONG MARKDOWN HOẶC VĂN BẢN KHÁC.
 
 NỘI DUNG GIÁO ÁN VÀ BÀI TẬP:
-${lessonText}`;
+${trimmedLesson}`;
 
-    const result = await callGemini(prompt);
-    let cleanJson = result.text.trim();
-    cleanJson = cleanJson.replace(/^```(json)?/i, "").replace(/```$/i, "").trim();
+    try {
+      const result = await callGemini(prompt, undefined, { responseMimeType: "application/json" });
+      let cleanJson = result.text.trim();
+      cleanJson = cleanJson.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 
-    const jsonMatch = cleanJson.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    const data = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJson);
-    res.json({ success: true, suggestions: data, modelUsed: result.modelUsed });
+      const jsonMatch = cleanJson.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      let data = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJson);
+
+      if (!Array.isArray(data) || data.length === 0) {
+        data = getSmartFallbackSuggestions(lessonText);
+      }
+
+      return res.json({ success: true, suggestions: data, modelUsed: result.modelUsed });
+    } catch (aiErr: any) {
+      console.warn("[generate-suggestions] AI call error, applying smart educational fallback:", aiErr.message || aiErr);
+      const fallback = getSmartFallbackSuggestions(lessonText);
+      return res.json({ success: true, suggestions: fallback, modelUsed: "smart-educational-fallback" });
+    }
   } catch (err: any) {
     console.error("[API generate-suggestions error]", err);
-    res.status(500).json({ success: false, error: formatGeminiError(err) });
+    const fallback = getSmartFallbackSuggestions(req.body?.lessonText || "");
+    res.json({ success: true, suggestions: fallback, modelUsed: "smart-educational-fallback" });
   }
 });
 

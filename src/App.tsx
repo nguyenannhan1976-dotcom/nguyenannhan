@@ -125,13 +125,19 @@ function App() {
   };
 
   const toggleType = (id: string) => {
-    // If clicking auto or suggest or any specific game type, select it directly
     setSelectedTypes([id]);
+    if (id === 'suggest') {
+      if (!lessonText || !lessonText.trim()) {
+        showToast("Vui lòng tải ảnh/tài liệu SGK hoặc dán nội dung bài học trước khi xem gợi ý nhé! 💡", "error");
+      } else {
+        handleGenerateSuggestions();
+      }
+    }
   };
 
   const handleNextStep1 = async () => {
     if (!lessonText || !lessonText.trim()) {
-      showToast("Vui lòng tải lên tài liệu SGK hoặc bấm 'Dùng thử file mẫu' / dán câu hỏi để tạo game!", "error");
+      showToast("Vui lòng tải lên tài liệu SGK hoặc dán câu hỏi để tạo game!", "error");
       return;
     }
     
@@ -143,13 +149,19 @@ function App() {
   };
 
   const handleGenerateSuggestions = async () => {
+    if (!lessonText || !lessonText.trim()) {
+      showToast("Vui lòng tải lên tài liệu SGK hoặc dán nội dung bài tập để xem gợi ý!", "error");
+      return;
+    }
+
     setIsLoading(true);
-    setLoadingText("🧠 Đang phân tích nội dung & câu hỏi để đề xuất loại game phù hợp...");
+    setLoadingText("🧠 Đang phân tích nội dung SGK để đề xuất 3 loại game tối ưu...");
 
     try {
       const res = await fetchGameSuggestions(lessonText);
       if (Array.isArray(res.suggestions) && res.suggestions.length > 0) {
         setSuggestions(res.suggestions);
+        setSelectedGame(res.suggestions[0]); // Tự động chọn gợi ý đầu tiên
         setStep(2);
       } else {
         throw new Error("Không nhận được danh sách gợi ý hợp lệ từ AI");
@@ -186,8 +198,12 @@ function App() {
     if (selectedTypes.includes('auto')) {
       targetGameDesc = "LOẠI GAME: Tự động phân tích câu hỏi và bài tập SGK để CHỌN 1 LOẠI mini-game giáo dục phù hợp nhất (Trắc nghiệm, Đúng/Sai, Nối cặp, v.v.).";
     } else if (selectedTypes.includes('suggest')) {
-      if (!selectedGame) return;
-      targetGameDesc = `LOẠI GAME: ${selectedGame.loai} - ${selectedGame.moTa}`;
+      const targetGame = selectedGame || (suggestions.length > 0 ? suggestions[0] : null);
+      if (targetGame) {
+        targetGameDesc = `LOẠI GAME: ${targetGame.loai} - ${targetGame.moTa}`;
+      } else {
+        targetGameDesc = "LOẠI GAME: Trắc nghiệm kiến thức SGK tương tác nhanh.";
+      }
     } else if (selectedTypes.length === 1) {
       const typeId = selectedTypes[0];
       const typeObj = GAME_TYPES.find(t => t.id === typeId);
