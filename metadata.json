@@ -1,0 +1,8 @@
+{
+  "name": "Remix Tạo game bằng AI (giaoviendoimoi.com)",
+  "description": "Trường Tiểu học Lạc Long Quân - Tạo trò chơi tương tác từ Sách Giáo Khoa. Mỗi tiết học là một niềm vui.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
