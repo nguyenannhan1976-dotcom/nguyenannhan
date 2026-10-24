@@ -238,19 +238,19 @@ function App() {
   }
 
   return (
-    <div className="fixed inset-0 font-sans text-slate-800 bg-[#f8fafc] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 font-sans text-slate-800 bg-gradient-to-br from-amber-50/60 via-pink-50/30 to-indigo-50/60 flex flex-col overflow-hidden">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {/* Header */}
-      <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-8 flex items-center justify-between shadow-xs shrink-0 z-20">
+      <header className="h-16 bg-white/95 backdrop-blur-md border-b-2 border-amber-200 px-3 sm:px-8 flex items-center justify-between shadow-xs shrink-0 z-20">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <img 
               src="/assets/aistudio/Capture_ab0cddf9.PNG" 
               alt="Logo Trường Tiểu học Lạc Long Quân" 
-              className="w-10 sm:w-11 h-10 sm:h-11 rounded-full object-contain bg-white shadow-md ring-2 ring-indigo-200/80 p-0.5"
+              className="w-10 sm:w-11 h-10 sm:h-11 rounded-full object-contain bg-white shadow-md ring-3 ring-amber-300 p-0.5"
             />
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-xs border border-white">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center shadow-xs border border-white">
               <Gamepad2 className="w-3 h-3" />
             </div>
           </div>
@@ -259,10 +259,11 @@ function App() {
               <span className="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 bg-clip-text text-transparent">
                 TRƯỜNG TIỂU HỌC
               </span>{" "}
-              <span className="bg-gradient-to-r from-fuchsia-600 via-rose-500 to-pink-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-amber-500 via-rose-500 to-pink-600 bg-clip-text text-transparent">
                 LẠC LONG QUÂN
               </span>
             </h1>
+            <p className="text-[10px] font-black text-rose-500 tracking-wide uppercase">Mỗi tiết học là một niềm vui 🎈</p>
           </div>
         </div>
 
@@ -348,7 +349,7 @@ function App() {
                       <label className="flex items-center gap-2.5 text-base font-bold tracking-tight mb-3">
                         <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-black shadow-xs">1</span>
                         <span className="text-slate-900 font-black">
-                          Tải lên File Sách Giáo Khoa <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-extrabold">(PDF Scan / Ảnh / Word)</span>
+                          Tải lên Sách Giáo Khoa <span className="bg-gradient-to-r from-amber-600 to-rose-600 bg-clip-text text-transparent font-extrabold">(Chọn Nhiều Ảnh Cùng Lúc / PDF / Word)</span>
                         </span>
                         {lessonText && (
                           <span className="text-emerald-700 text-xs font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1 shadow-2xs">
@@ -361,7 +362,7 @@ function App() {
                         onFileProcessed={(text, meta) => { 
                           setLessonText(text); 
                           setFileMetadata(meta);
-                          showToast("Đã trích xuất thành công nội dung và câu hỏi từ tài liệu!", "success");
+                          showToast("Đã trích xuất thành công nội dung và câu hỏi từ các file tài liệu/ảnh!", "success");
                         }} 
                         onError={(err) => showToast(err, "error")} 
                       />
@@ -411,8 +412,8 @@ function App() {
                                     </span>
                                   )}
                                 </h4>
-                                <p className="text-xs text-slate-500">
-                                  {fileMetadata?.fileName || "Tài liệu SGK"} {fileMetadata?.numPages ? `(${fileMetadata.numPages} trang)` : ""}
+                                <p className="text-xs text-slate-500 font-medium">
+                                  {fileMetadata?.fileName || "Tài liệu SGK"} {fileMetadata?.numPages ? `(${fileMetadata.numPages} trang)` : fileMetadata?.numFiles ? `(${fileMetadata.numFiles} ảnh)` : ""}
                                 </p>
                               </div>
                             </div>

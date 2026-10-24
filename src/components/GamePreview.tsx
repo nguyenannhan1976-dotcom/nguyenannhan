@@ -19,6 +19,7 @@ export function GamePreview({
 }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -228,7 +229,6 @@ export function GamePreview({
             srcDoc={htmlContent} 
             className="w-full h-full flex-1 border-none bg-white block" 
             allow="fullscreen; autoplay; clipboard-write; cross-origin-isolated"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
             title="Game Preview"
           />
         )}

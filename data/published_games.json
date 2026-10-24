@@ -1,0 +1,94 @@
+[
+  {
+    "id": "game-llq-sample",
+    "pinCode": "LLQ-5829",
+    "title": "Trò chơi Khám phá Mệnh đề Toán học",
+    "className": "Lớp 5A1",
+    "gameType": "Trắc nghiệm",
+    "questionCount": 3,
+    "htmlContent": "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"><title>Mệnh đề Toán học</title><script src=\"https://cdn.tailwindcss.com\"></script></head><body class=\"bg-amber-50 min-h-screen p-4 flex flex-col items-center justify-center\"><div id=\"screen-start\" class=\"text-center max-w-md bg-white p-6 rounded-3xl shadow-xl border-4 border-amber-300\"><div class=\"text-xs font-black text-indigo-700 uppercase mb-2\">TRƯỜNG TIỂU HỌC LẠC LONG QUÂN</div><h1 class=\"text-2xl font-black text-slate-900 mb-2\">Đấu Trí Mệnh Đề</h1><p class=\"text-xs text-slate-500 mb-6\">Mỗi tiết học là một niềm vui 🎈</p><button onclick=\"startGame()\" class=\"w-full py-3.5 bg-gradient-to-r from-amber-500 to-rose-500 text-white font-black rounded-2xl shadow-lg cursor-pointer\">BẮT ĐẦU CHƠI 🚀</button></div><div id=\"screen-game\" class=\"hidden max-w-lg w-full bg-white p-6 rounded-3xl shadow-xl border-4 border-indigo-300\"><div class=\"flex justify-between items-center mb-4\"><span class=\"text-xs font-bold text-slate-500\" id=\"q-idx\">Câu 1/3</span><span class=\"text-xs font-black text-indigo-600\" id=\"score-display\">Điểm: 0</span></div><h3 id=\"q-text\" class=\"text-base font-black text-slate-800 mb-4\"></h3><div id=\"options\" class=\"space-y-2\"></div></div><div id=\"screen-result\" class=\"hidden max-w-md w-full bg-white p-6 rounded-3xl shadow-xl border-4 border-emerald-300 text-center\"><div class=\"text-4xl mb-2\">🏆</div><h2 class=\"text-xl font-black text-slate-900 mb-1\">Hoàn thành trò chơi!</h2><p id=\"final-score\" class=\"text-sm font-bold text-indigo-600 mb-4\"></p><button onclick=\"restartGame()\" class=\"w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl cursor-pointer\">Chơi lại</button></div><script>var questions=[{q:'Trong các câu sau, câu nào là mệnh đề toán học?',opts:['Hôm nay trời đẹp quá!','15 là số nguyên tố.','Bạn học trường nào?','Hãy chú ý làm bài!'],ans:1,exp:'Mệnh đề toán học là khẳng định có tính đúng hoặc sai rõ ràng. Câu \"15 là số nguyên tố\" là một khẳng định có thể xác định tính đúng sai (mệnh đề sai).'},{q:'Phủ định của mệnh đề \"Số 7 là số lẻ\" là gì?',opts:['Số 7 không phải là số lẻ.','Số 7 là số nguyên tố.','Số 7 chia hết cho 2.','Số 7 là số dương.'],ans:0,exp:'Phủ định của mệnh đề P là \"Không phải P\". Do đó phủ định của \"Số 7 là số lẻ\" là \"Số 7 không phải là số lẻ\".'},{q:'Giá trị của biểu thức 2³ + 5 là bao nhiêu?',opts:['11','13','10','15'],ans:1,exp:'Ta có 2³ = 8, 8 + 5 = 13. Đáp án chính xác là 13.'}];var curIdx=0,score=0;function startGame(){document.getElementById('screen-start').classList.add('hidden');document.getElementById('screen-game').classList.remove('hidden');renderQ();}function renderQ(){var q=questions[curIdx];document.getElementById('q-idx').innerText='Câu '+(curIdx+1)+'/'+questions.length;document.getElementById('q-text').innerText=q.q;var optContainer=document.getElementById('options');optContainer.innerHTML='';q.opts.forEach(function(opt,i){var btn=document.createElement('button');btn.className='w-full text-left p-3.5 rounded-2xl border-2 border-slate-200 hover:border-indigo-400 font-bold text-xs bg-slate-50 transition-all block cursor-pointer';btn.innerText=opt;btn.onclick=function(){selectAnswer(i);};optContainer.appendChild(btn);});}function selectAnswer(chosenIdx){var q=questions[curIdx];var isCorrect=(chosenIdx===q.ans);if(isCorrect){score+=10;window.playGameSound&&window.playGameSound('correct');}else{window.playGameSound&&window.playGameSound('wrong');}if(window.recordAnswer){window.recordAnswer(q.q,q.opts[chosenIdx],q.opts[q.ans],isCorrect,q.exp);}curIdx++;if(curIdx<questions.length){setTimeout(renderQ,700);}else{finishGame();}}function finishGame(){document.getElementById('screen-game').classList.add('hidden');document.getElementById('screen-result').classList.remove('hidden');document.getElementById('final-score').innerText='Em đạt được: '+score+' / 30 điểm';if(window.reportGameResult){window.reportGameResult(score,30);}else{window.parent.postMessage({type:'GAME_COMPLETE',score:score,maxScore:30},'*');}}function restartGame(){curIdx=0;score=0;document.getElementById('screen-result').classList.add('hidden');startGame();}</script></body></html>",
+    "createdAt": "2026-10-24T00:00:00.000Z",
+    "submissions": [
+      {
+        "id": "sub-sample-1",
+        "studentName": "Nguyễn Minh Khôi",
+        "studentClass": "Lớp 5A1",
+        "score": 30,
+        "maxScore": 30,
+        "accuracy": 100,
+        "gradeLabel": "Xuất sắc 🌟",
+        "correctCount": 3,
+        "wrongCount": 0,
+        "totalQuestions": 3,
+        "answers": [
+          {
+            "questionIndex": 1,
+            "question": "Trong các câu sau, câu nào là mệnh đề toán học?",
+            "studentAnswer": "15 là số nguyên tố.",
+            "correctAnswer": "15 là số nguyên tố.",
+            "isCorrect": true,
+            "explanation": "Mệnh đề toán học là khẳng định có tính đúng hoặc sai rõ ràng."
+          },
+          {
+            "questionIndex": 2,
+            "question": "Phủ định của mệnh đề \"Số 7 là số lẻ\" là gì?",
+            "studentAnswer": "Số 7 không phải là số lẻ.",
+            "correctAnswer": "Số 7 không phải là số lẻ.",
+            "isCorrect": true,
+            "explanation": "Phủ định của mệnh đề P là \"Không phải P\"."
+          },
+          {
+            "questionIndex": 3,
+            "question": "Giá trị của biểu thức 2³ + 5 là bao nhiêu?",
+            "studentAnswer": "13",
+            "correctAnswer": "13",
+            "isCorrect": true,
+            "explanation": "Ta có 2³ = 8, 8 + 5 = 13. Đáp án đúng là 13."
+          }
+        ],
+        "timeSpentSeconds": 45,
+        "submittedAt": "2026-10-24T02:00:00.000Z"
+      },
+      {
+        "id": "sub-sample-2",
+        "studentName": "Trần Bảo Ngọc",
+        "studentClass": "Lớp 5A1",
+        "score": 20,
+        "maxScore": 30,
+        "accuracy": 67,
+        "gradeLabel": "Đạt 👍",
+        "correctCount": 2,
+        "wrongCount": 1,
+        "totalQuestions": 3,
+        "answers": [
+          {
+            "questionIndex": 1,
+            "question": "Trong các câu sau, câu nào là mệnh đề toán học?",
+            "studentAnswer": "Hôm nay trời đẹp quá!",
+            "correctAnswer": "15 là số nguyên tố.",
+            "isCorrect": false,
+            "explanation": "Câu 'Hôm nay trời đẹp quá!' là câu cảm thán, không phải mệnh đề toán học. Khẳng định '15 là số nguyên tố' mới là mệnh đề toán học."
+          },
+          {
+            "questionIndex": 2,
+            "question": "Phủ định của mệnh đề \"Số 7 là số lẻ\" là gì?",
+            "studentAnswer": "Số 7 không phải là số lẻ.",
+            "correctAnswer": "Số 7 không phải là số lẻ.",
+            "isCorrect": true,
+            "explanation": "Phủ định của mệnh đề P là \"Không phải P\"."
+          },
+          {
+            "questionIndex": 3,
+            "question": "Giá trị của biểu thức 2³ + 5 là bao nhiêu?",
+            "studentAnswer": "13",
+            "correctAnswer": "13",
+            "isCorrect": true,
+            "explanation": "2³ = 8, 8 + 5 = 13."
+          }
+        ],
+        "timeSpentSeconds": 58,
+        "submittedAt": "2026-10-24T02:15:00.000Z"
+      }
+    ]
+  }
+]

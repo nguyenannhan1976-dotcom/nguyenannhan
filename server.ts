@@ -129,7 +129,7 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
   }
   .hidden { display: none !important; }
   
-  /* High performance button interaction (zero delay, GPU-accelerated) */
+  /* High performance button interaction */
   button, [role="button"], .option-btn {
     cursor: pointer !important;
     touch-action: manipulation;
@@ -152,7 +152,6 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
   }
   #screen-start:not(.hidden), #screen-game:not(.hidden), #screen-result:not(.hidden) {
     animation: gameFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    will-change: transform, opacity;
   }
 
   /* Smooth progress bar */
@@ -163,6 +162,11 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
 </style>
 <script id="game-performance-engine">
 (function() {
+  // Prevent any unhandled error from breaking the game experience
+  window.addEventListener('error', function(e) {
+    console.warn('[EduGame Notice]', e.message);
+  });
+
   // 1. AudioContext Singleton Proxy (prevents AudioContext exhaustion & frame drops)
   var _NativeAudioContext = window.AudioContext || window.webkitAudioContext;
   var _sharedAudioCtx = null;
@@ -179,7 +183,6 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
     return _sharedAudioCtx;
   }
 
-  // Intercept constructor so ANY new AudioContext() in generated code reuses the single fast instance
   if (_NativeAudioContext) {
     var ProxiedAudioContext = function() {
       return getSharedAudioCtx();
@@ -231,47 +234,43 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
   window.playSound = window.playGameSound;
   window.playSoundSafely = window.playGameSound;
 
-  // 3. Smart Question Advance Accelerator:
-  // Clamps overlong 1.2s - 2s timeouts down to snappy 600ms, and allows instant tap-to-advance!
-  var _origSetTimeout = window.setTimeout;
-  var _pendingAdvanceTimer = null;
-  var _pendingAdvanceCallback = null;
+  // 3. Question & Answer Detailed Tracker
+  window.__eduAnswersHistory = [];
 
-  window.setTimeout = function(fn, delay) {
-    var args = Array.prototype.slice.call(arguments, 2);
-    var tunedDelay = delay;
-
-    // Check if this is an auto-advance transition timeout (800ms - 3000ms)
-    if (typeof delay === 'number' && delay >= 800 && delay <= 3000) {
-      tunedDelay = 600; // Crisp, fast 600ms transition
-      var wrappedFn = function() {
-        _pendingAdvanceTimer = null;
-        _pendingAdvanceCallback = null;
-        if (typeof fn === 'function') fn.apply(window, args);
-      };
-      _pendingAdvanceCallback = wrappedFn;
-      _pendingAdvanceTimer = _origSetTimeout(wrappedFn, tunedDelay);
-      return _pendingAdvanceTimer;
-    }
-
-    return _origSetTimeout.apply(window, [fn, delay].concat(args));
+  window.recordAnswer = function(question, studentAnswer, correctAnswer, isCorrect, explanation) {
+    try {
+      window.__eduAnswersHistory.push({
+        questionIndex: window.__eduAnswersHistory.length + 1,
+        question: question || "",
+        studentAnswer: studentAnswer || "",
+        correctAnswer: correctAnswer || "",
+        isCorrect: !!isCorrect,
+        explanation: explanation || ""
+      });
+    } catch(e) {}
   };
 
-  // Instant Advance on Click/Tap: If user clicks or taps while waiting for next question, trigger immediately!
-  function triggerInstantAdvance() {
-    if (_pendingAdvanceTimer && _pendingAdvanceCallback) {
-      clearTimeout(_pendingAdvanceTimer);
-      var cb = _pendingAdvanceCallback;
-      _pendingAdvanceTimer = null;
-      _pendingAdvanceCallback = null;
-      cb();
-    }
-  }
+  // 4. Standard Game Result Reporter
+  window.reportGameResult = function(score, maxScore, customAnswers) {
+    try {
+      var answers = customAnswers || window.__eduAnswersHistory || [];
+      var totalQ = answers.length;
+      var correctQ = answers.filter(function(a){ return a.isCorrect; }).length;
+      var wrongQ = totalQ - correctQ;
 
-  window.addEventListener('click', triggerInstantAdvance, true);
-  window.addEventListener('keydown', function(e) {
-    if (e.key === ' ' || e.key === 'Enter') triggerInstantAdvance();
-  }, true);
+      window.parent.postMessage({
+        type: 'GAME_COMPLETE',
+        score: Number(score) || 0,
+        maxScore: Number(maxScore) || 100,
+        totalQuestions: totalQ,
+        correctCount: correctQ,
+        wrongCount: wrongQ,
+        answers: answers
+      }, '*');
+    } catch(e) {
+      console.warn('postMessage error', e);
+    }
+  };
 
   // Pre-warm audio on first interaction
   function warmUp() {
@@ -365,6 +364,15 @@ async function callGemini(
 // Published Games & Student Submissions Persistence
 const GAMES_FILE = path.join(ROOT_DIR, "data", "published_games.json");
 
+export interface StudentAnswerItem {
+  questionIndex: number;
+  question: string;
+  studentAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  explanation?: string;
+}
+
 interface StudentSubmission {
   id: string;
   studentName: string;
@@ -373,6 +381,10 @@ interface StudentSubmission {
   maxScore: number;
   accuracy: number;
   gradeLabel: string;
+  correctCount?: number;
+  wrongCount?: number;
+  totalQuestions?: number;
+  answers?: StudentAnswerItem[];
   timeSpentSeconds?: number;
   submittedAt: string;
 }
@@ -478,6 +490,17 @@ app.get("/api/published-games/:id", (req, res) => {
   res.json({ success: true, game });
 });
 
+// Direct HTML delivery (guarantees zero-friction execution in any browser/iframe)
+app.get("/api/published-games/:id/raw", (req, res) => {
+  const games = loadPublishedGames();
+  const game = games.find((g) => g.id === req.params.id);
+  if (!game) {
+    return res.status(404).send("Không tìm thấy trò chơi");
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(game.htmlContent);
+});
+
 app.get("/api/published-games/by-pin/:pin", (req, res) => {
   const games = loadPublishedGames();
   const targetPin = req.params.pin.trim().toUpperCase().replace(/\s+/g, "");
@@ -492,7 +515,18 @@ app.get("/api/published-games/by-pin/:pin", (req, res) => {
 
 app.post("/api/published-games/:id/submit", (req, res) => {
   try {
-    const { studentName, studentClass, score = 0, maxScore = 100, timeSpentSeconds = 0 } = req.body;
+    const { 
+      studentName, 
+      studentClass, 
+      score = 0, 
+      maxScore = 100, 
+      timeSpentSeconds = 0,
+      correctCount,
+      wrongCount,
+      totalQuestions,
+      answers = []
+    } = req.body;
+
     if (!studentName || !studentName.trim()) {
       return res.status(400).json({ success: false, error: "Vui lòng nhập họ và tên học sinh" });
     }
@@ -516,6 +550,10 @@ app.post("/api/published-games/:id/submit", (req, res) => {
     else if (accuracy >= 75) gradeLabel = "Giỏi 👏";
     else if (accuracy >= 50) gradeLabel = "Đạt 👍";
 
+    const totalQ = totalQuestions !== undefined ? Number(totalQuestions) : (Array.isArray(answers) ? answers.length : 0);
+    const correctQ = correctCount !== undefined ? Number(correctCount) : (Array.isArray(answers) ? answers.filter((a: any) => a.isCorrect).length : 0);
+    const wrongQ = wrongCount !== undefined ? Number(wrongCount) : (totalQ > 0 ? totalQ - correctQ : 0);
+
     const submission: StudentSubmission = {
       id: "sub-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6),
       studentName: studentName.trim(),
@@ -524,6 +562,10 @@ app.post("/api/published-games/:id/submit", (req, res) => {
       maxScore: numMaxScore,
       accuracy,
       gradeLabel,
+      correctCount: correctQ,
+      wrongCount: wrongQ,
+      totalQuestions: totalQ,
+      answers: Array.isArray(answers) ? answers : [],
       timeSpentSeconds: Number(timeSpentSeconds) || 0,
       submittedAt: new Date().toISOString(),
     };
@@ -535,6 +577,68 @@ app.post("/api/published-games/:id/submit", (req, res) => {
   } catch (err: any) {
     console.error("[POST submit error]", err);
     res.status(500).json({ success: false, error: err.message || "Lỗi khi lưu kết quả học sinh" });
+  }
+});
+
+// Xóa tất cả kết quả của 1 trò chơi
+app.delete("/api/published-games/:id/submissions", (req, res) => {
+  try {
+    const games = loadPublishedGames();
+    const game = games.find((g) => g.id === req.params.id);
+    if (!game) {
+      return res.status(404).json({ success: false, error: "Không tìm thấy trò chơi" });
+    }
+    const count = (game.submissions || []).length;
+    game.submissions = [];
+    savePublishedGames(games);
+    res.json({ success: true, message: `Đã xóa tất cả ${count} kết quả học sinh`, deletedCount: count });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Lỗi khi xóa kết quả" });
+  }
+});
+
+// Xóa kết quả tùy chọn (batch delete by subIds)
+app.post("/api/published-games/:id/submissions/delete-batch", (req, res) => {
+  try {
+    const { subIds } = req.body;
+    if (!Array.isArray(subIds) || subIds.length === 0) {
+      return res.status(400).json({ success: false, error: "Danh sách kết quả cần xóa rỗng" });
+    }
+    const games = loadPublishedGames();
+    const game = games.find((g) => g.id === req.params.id);
+    if (!game) {
+      return res.status(404).json({ success: false, error: "Không tìm thấy trò chơi" });
+    }
+
+    const set = new Set(subIds);
+    const beforeCount = (game.submissions || []).length;
+    game.submissions = (game.submissions || []).filter((s) => !set.has(s.id));
+    const deletedCount = beforeCount - game.submissions.length;
+    savePublishedGames(games);
+
+    res.json({ success: true, message: `Đã xóa ${deletedCount} kết quả được chọn`, deletedCount });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Lỗi khi xóa kết quả đã chọn" });
+  }
+});
+
+// Xóa 1 kết quả cụ thể theo subId
+app.delete("/api/published-games/:id/submissions/:subId", (req, res) => {
+  try {
+    const games = loadPublishedGames();
+    const game = games.find((g) => g.id === req.params.id);
+    if (!game) {
+      return res.status(404).json({ success: false, error: "Không tìm thấy trò chơi" });
+    }
+    const beforeCount = (game.submissions || []).length;
+    game.submissions = (game.submissions || []).filter((s) => s.id !== req.params.subId);
+    if (game.submissions.length === beforeCount) {
+      return res.status(404).json({ success: false, error: "Không tìm thấy kết quả để xóa" });
+    }
+    savePublishedGames(games);
+    res.json({ success: true, message: "Đã xóa kết quả thành công" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Lỗi khi xóa kết quả" });
   }
 });
 
@@ -573,7 +677,7 @@ app.get("/api/sample-sgk", (_req, res) => {
 // 2. Extract content & questions from PDF / Image / Text
 app.post("/api/extract-pdf", async (req, res) => {
   try {
-    const { fileBase64, mimeType, fileName, textContent } = req.body;
+    const { fileBase64, mimeType, fileName, textContent, files } = req.body;
 
     const extractionPrompt = `Bạn là chuyên gia giáo dục và sư phạm hàng đầu.
 Nhiệm vụ của bạn là đọc và phân tích kỹ tài liệu học tập / sách giáo khoa (SGK) được cung cấp dưới đây.
@@ -594,7 +698,32 @@ Hãy trình bày rõ ràng, mạch lạc, dễ đọc bằng tiếng Việt.`;
 
     let contents: any;
 
-    if (fileBase64 && mimeType) {
+    if (Array.isArray(files) && files.length > 0) {
+      const inlineParts = files
+        .filter((f: any) => f.fileBase64 && f.mimeType)
+        .map((f: any) => ({
+          inlineData: {
+            mimeType: f.mimeType === "application/pdf" ? "application/pdf" : f.mimeType,
+            data: f.fileBase64,
+          },
+        }));
+
+      const textParts = files
+        .filter((f: any) => f.textContent && f.textContent.trim())
+        .map((f: any, idx: number) => `\n[Trang/Tài liệu ${idx + 1}: ${f.fileName || ""}]\n${f.textContent}\n`)
+        .join("\n");
+
+      if (inlineParts.length === 0 && !textParts.trim()) {
+        return res.status(400).json({ error: "Không tìm thấy dữ liệu ảnh hoặc chữ trong các file đã tải lên." });
+      }
+
+      const multiPrompt = `${extractionPrompt}\n\nCHÚ Ý ĐẶC BIỆT: Giáo viên đã tải lên ${files.length} ảnh/tài liệu trang sách giáo khoa. Hãy đọc kỹ TẤT CẢ ${inlineParts.length} trang/ảnh được đính kèm ở trên và tổng hợp toàn bộ câu hỏi, bài tập có trong tất cả các trang sách đó.${textParts ? `\n\nNỘI DUNG VĂN BẢN ĐÍNH KÈM:\n${textParts}` : ""}`;
+
+      contents = [
+        ...inlineParts,
+        { text: multiPrompt },
+      ];
+    } else if (fileBase64 && mimeType) {
       contents = [
         {
           inlineData: {
@@ -611,7 +740,7 @@ Hãy trình bày rõ ràng, mạch lạc, dễ đọc bằng tiếng Việt.`;
         },
       ];
     } else {
-      return res.status(400).json({ error: "Thiếu dữ liệu fileBase64 hoặc textContent" });
+      return res.status(400).json({ error: "Thiếu dữ liệu fileBase64, textContent hoặc danh sách files" });
     }
 
     const result = await callGemini(contents);
@@ -700,7 +829,7 @@ app.post("/api/generate-game", async (req, res) => {
       ? `9. SỬ DỤNG EMOJI/BIỂU TƯỢNG VUI NHỘN: BẮT BUỘC sử dụng nhiều Emoji vui nhộn cỡ lớn để minh hoạ, hoặc thay thế chữ viết trong câu hỏi/đáp án nếu phù hợp.`
       : "";
 
-    const prompt = `Dựa vào chuyên môn của một Senior Game Developer và UI/UX Designer, hãy lập trình một file HTML5 hoàn chỉnh chứa mini game giáo dục tương tác.
+    const prompt = `Dựa vào chuyên môn của một Senior Game Developer và UI/UX Designer, hãy lập trình một file HTML5 hoàn chỉnh chứa mini game giáo dục tương tác đỉnh cao.
 ${gameNameStr}
 NỘI DUNG SÁCH GIÁO KHOA / GIÁO ÁN VÀ CÁC CÂU HỎI BÀI TẬP ĐÃ TRÍCH XUẤT:
 ---
@@ -710,9 +839,11 @@ ${lessonText}
 ${targetGameDesc}
 ${customReqStr}
 
-YÊU CẦU GIAO DIỆN TỪ THEME BUILDER:
-- Màu chủ đạo (Primary Color Tailwind): màu ${themeColor}-500 (Tự động phối hợp hài hòa với các shade ${themeColor}-100 đến ${themeColor}-900)
+YÊU CẦU GIAO DIỆN & MÀU SẮC (SẶC SỠ, TƯƠI SÁNG, PHÙ HỢP TIỂU HỌC):
+- GIAO DIỆN SẶC SỠ, VUI NHỘN: Phối hợp các dải màu tươi sáng, rực rỡ (gradient vàng cam ấm áp, xanh ngọc bích tươi, tím violet phấn khởi, xanh dương biển, hồng phấn), bo góc tròn lớn mượt mà (rounded-3xl, rounded-2xl), bóng đổ mềm mại, các thẻ câu hỏi và nút bấm to bản, nổi bật.
+- Màu chủ đạo (Primary Color Tailwind): màu ${themeColor}-500 (Tự động phối hợp hài hòa và rực rỡ với các shade ${themeColor}-100 đến ${themeColor}-900)
 - Font chữ: '${themeFont}' (hỗ trợ tiếng Việt đầy đủ)
+- Nhiều Emoji ngộ nghĩnh, hoạt hình, tạo cảm giác như một ngày hội học tập!
 
 QUY TẮC NỘI DUNG BẮT BUỘC (RẤT QUAN TRỌNG):
 1. BẮT BUỘC PHẢI DÙNG CÁC CÂU HỎI VÀ BÀI TẬP CÓ TRONG NỘI DUNG SGK Ở TRÊN:
@@ -721,42 +852,57 @@ QUY TẮC NỘI DUNG BẮT BUỘC (RẤT QUAN TRỌNG):
    - Sinh CHÍNH XÁC ${questionCount} câu hỏi/thử thách phong phú, bám sát các câu hỏi bài tập SGK đã cung cấp.
    - BẮT BUỘC xáo trộn ngẫu nhiên vị trí đáp án đúng, không để đáp án đúng luôn nằm ở lựa chọn đầu tiên (A).
 2. QUY CHUẨN THIẾT KẾ CHO TỪNG THỂ LOẠI GAME ĐẢM BẢO CHẠY MƯỢT 60 FPS:
-   - TRẮC NGHIỆM: Các phương án lựa chọn A, B, C, D to rõ, bấm phản hồi tức thì trong 0ms, đổi màu xanh lá/đỏ ngay lập tức và chuyển câu sau 700ms - 800ms.
+   - TRẮC NGHIỆM: Các phương án lựa chọn A, B, C, D to rõ, bấm phản hồi tức thì trong 0ms, đổi màu xanh lá/đỏ ngay lập tức và chuyển câu sau 800ms.
    - NỐI CẶP (MATCHING): Hiển thị 2 cột song song (Cột Trái: Đề bài/Thuật ngữ; Cột Phải: Định nghĩa/Đáp án). Sử dụng cơ chế CLICK-TO-PAIR mượt mà (Bấm 1 thẻ cột trái -> thẻ sáng viền xanh -> Bấm 1 thẻ cột phải -> nếu đúng thì cả 2 thẻ xanh lá và khóa lại, nếu sai thì nhấp nháy đỏ 400ms và bỏ chọn). Tuyệt đối KHÔNG dùng HTML5 drag-and-drop.
-   - ĐÚNG / SAI: Thẻ câu hỏi to ở giữa, 2 nút bấm nổi bật "✅ ĐÚNG" (xanh lá) và "❌ SAI" (đỏ). Nhận click tức thì, giải thích ngắn gọn và chuyển câu sau 750ms.
+   - ĐÚNG / SAI: Thẻ câu hỏi to ở giữa, 2 nút bấm nổi bật "✅ ĐÚNG" (xanh lá) và "❌ SAI" (đỏ). Nhận click tức thì, giải thích ngắn gọn và chuyển câu sau 800ms.
    - ĐIỀN TỪ (FILL IN THE BLANK): Câu văn có chỗ khuyết [ _____ ], phía dưới là Ngân hàng từ (Word Bank) gồm các thẻ từ bấm được. Học sinh bấm thẻ từ nào thì từ đó tự điền vào chỗ khuyết ngay lập tức, có nút "Xóa" và "Kiểm tra".
    - PHÂN LOẠI NHÓM: Dùng cơ chế Click-to-Sort (Hiển thị thẻ cần xếp, bên dưới là 2-3 Hộp danh mục; học sinh bấm vào Hộp nào thì thẻ tự chuyển vào hộp đó kèm animation trượt mượt mà).
    - SẮP XẾP THỨ TỰ: Danh sách các thẻ cần xếp thứ tự, mỗi thẻ có nút ⬆️ Lên và ⬇️ Xuống hoặc bấm 2 thẻ để hoán đổi vị trí, kèm nút "Kiểm tra kết quả".
    - LẬT THẺ GHI NHỚ: Lưới 6 - 12 thẻ úp, bấm lật mở có hiệu ứng 3D CSS mượt mà. Lật đúng cặp thì giữ nguyên, sai thì tự úp lại sau 750ms.
    - ĐOÁN TỪ: Ô chữ _ _ _ _, gợi ý từ bài học, bàn phím chữ cái A-Z dạng nút bấm và số lượt chơi (trái tim ❤️❤️❤️❤️❤️).
-3. CHỈ TRẢ VỀ code HTML thuần túy, bắt đầu bằng <!DOCTYPE html>. Không bọc trong \`\`\`html \`\`\`. Không giải thích.
-4. KHÔNG LỖI JS: Mọi hàm và biến được gọi PHẢI được định nghĩa đầy đủ (tránh ReferenceError).
-5. ĐỘC LẬP: Mọi CSS/JS/HTML phải nằm trong cùng 1 file. ĐƯỢC PHÉP dùng các CDN:
+3. CHỈ RA CÂU SAI & GỢI Ý TRẢ LỜI CHI TIẾT (ĐẶC BIỆT QUAN TRỌNG):
+   - BẮT BUỘC tạo biến \`userAnswersHistory = []\` ghi nhận lại toàn bộ bài làm:
+     \`\`\`javascript
+     // Mỗi khi học sinh trả lời 1 câu:
+     userAnswersHistory.push({
+       questionIndex: currentQuestionIndex + 1,
+       question: "Đề bài câu hỏi...",
+       studentAnswer: "Phương án học sinh đã chọn...",
+       correctAnswer: "Đáp án đúng chính xác...",
+       isCorrect: isCorrect, // boolean
+       explanation: "Gợi ý trả lời & giải thích chi tiết dễ hiểu cho học sinh..."
+     });
+     \`\`\`
+   - Tại Màn hình Kết quả (id="screen-result"):
+     * Hiển thị: Tổng số câu đúng (màu xanh lá) và Tổng số câu sai (màu đỏ).
+     * Bảng/Danh sách 'GỢI Ý & ÔN TẬP CÂU SAI': Nếu học sinh có câu sai, hiển thị rõ từng câu sai, em đã chọn gì, đáp án đúng là gì và hộp gợi ý: "💡 Gợi ý giải: [lời giải]".
+   - Khi hoàn thành trò chơi, gọi:
+     \`\`\`javascript
+     window.parent.postMessage({
+       type: 'GAME_COMPLETE',
+       score: score,
+       maxScore: maxScore,
+       totalQuestions: totalQuestions,
+       correctCount: correctCount,
+       wrongCount: wrongCount,
+       answers: userAnswersHistory
+     }, '*');
+     \`\`\`
+4. CHỈ TRẢ VỀ code HTML thuần túy, bắt đầu bằng <!DOCTYPE html>. Không bọc trong \`\`\`html \`\`\`. Không giải thích.
+5. KHÔNG LỖI JS: Mọi hàm và biến được gọi PHẢI được định nghĩa đầy đủ (tránh ReferenceError).
+6. ĐỘC LẬP: Mọi CSS/JS/HTML phải nằm trong cùng 1 file. ĐƯỢC PHÉP dùng các CDN:
    - Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
    - Canvas Confetti: <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
    - Google Fonts (import font ${themeFont} vào CSS).
    Tuyệt đối KHÔNG dùng CDN hình ảnh bên ngoài, chỉ dùng Emoji hoặc SVG inline.
-6. TIÊU CHUẨN GIAO DIỆN & GAMEPLAY BẮT BUỘC CHƠI ĐƯỢC 100%:
-   - Bố cục 3 màn hình chuyển đổi tin cậy:
-     + Màn hình Bắt đầu (id="screen-start"): Hiển thị tên trò chơi và nút "BẮT ĐẦU CHƠI" (onclick="startGame()").
-     + Màn hình Chơi chính (id="screen-game"): Mặc định có class "hidden". Khi bấm Bắt đầu, hàm startGame() ẩn screen-start và hiện screen-game.
-     + Màn hình Kết quả (id="screen-result"): Mặc định có class "hidden". Khi trả lời xong câu cuối, ẩn screen-game và hiện screen-result kèm tổng điểm, số câu đúng và nút "CHƠI LẠI" (onclick="restartGame()").
-   - TƯƠNG TÁC BẤM CHỌN CÂU TRẢ LỜI:
-     + Các phương án phải là thẻ <button class="option-btn" onclick="..."> rõ ràng, nhận sự kiện click nhạy bén.
-     + Khi học sinh bấm chọn:
-       * Nếu ĐÚNG: Nút đổi sang màu xanh lá (bg-emerald-500 text-white), cộng điểm, hiển thị lời khen.
-       * Nếu SAI: Nút đổi sang màu đỏ (bg-rose-500 text-white), đồng thời làm nổi bật đáp án đúng màu xanh để học sinh nắm bài.
-       * Chuyển sang câu hỏi kế tiếp sau 1.2 - 1.5 giây hoặc bấm nút Next.
-   - ÂM THANH AN TOÀN: Mọi lệnh phát âm thanh phải bọc trong try { ...play().catch(e => {}) } catch(e){} để không bao giờ bị nghẽn lệnh Javascript.
-   - Thanh tiến trình (Progress bar), Bảng điểm số, Nút "Chơi Lại" kèm hiệu ứng Confetti.
-   - Nút "Toàn màn hình" (🔲) ở góc trên để phóng to qua requestFullscreen.
-   - Nút "Bỏ qua" (Skip) ở mỗi câu hỏi để bỏ qua không tính điểm.
-7. TÍCH HỢP HỆ THỐNG: Gửi event \`window.parent.postMessage({ type: 'GAME_COMPLETE', score, maxScore }, '*');\` khi hoàn thành trò chơi.
+7. BỐ CỤC 3 MÀN HÌNH CHUYỂN ĐỔI TIN CẬY:
+   - Màn hình Bắt đầu (id="screen-start"): Hiển thị tên trò chơi và nút "BẮT ĐẦU CHƠI" (onclick="startGame()").
+   - Màn hình Chơi chính (id="screen-game"): Mặc định có class "hidden". Khi bấm Bắt đầu, hàm startGame() ẩn screen-start và hiện screen-game.
+   - Màn hình Kết quả (id="screen-result"): Mặc định có class "hidden".
 8. TỐI ƯU MOBILE & SCROLL: Container chính PHẢI có \`min-height: 100vh; overflow-y: auto; padding-bottom: 2rem;\` để đảm bảo luôn cuộn được và nhìn thấy nút bấm.
 ${useIconsStr}
-10. TUYỆT ĐỐI CẤM DÙNG ALERT/CONFIRM/PROMPT: KHÔNG BAO GIỜ sử dụng window.alert, alert(...), window.confirm hay window.prompt trong bất kỳ hàm nào (kể cả hàm kết thúc finishGame). Luôn dùng Modal UI bằng thẻ <div> hoặc Toast tùy chỉnh để hiển thị thông báo.
-11. NÚT HOÀN THÀNH: Ở màn hình kết quả cuối cùng, BẮT BUỘC có nút "HOÀN THÀNH" to rõ ràng để kết thúc game.
-12. TIÊU ĐỀ: Ở Màn hình Bắt đầu (Start Screen), hiển thị trang trọng: "TRƯỜNG TIỂU HỌC LẠC LONG QUÂN" và thông điệp "Mỗi tiết học là một niềm vui".
+9. TUYỆT ĐỐI CẤM DÙNG ALERT/CONFIRM/PROMPT: KHÔNG BAO GIỜ sử dụng window.alert, alert(...), window.confirm hay window.prompt.
+10. TIÊU ĐỀ: Ở Màn hình Bắt đầu (Start Screen), hiển thị trang trọng: "TRƯỜNG TIỂU HỌC LẠC LONG QUÂN" và thông điệp "Mỗi tiết học là một niềm vui".
 
 BẮT ĐẦU VỚI <!DOCTYPE html> VÀ THỂ HIỆN TRÌNH ĐỘ CODE ĐỈNH CAO NHẤT!`;
 

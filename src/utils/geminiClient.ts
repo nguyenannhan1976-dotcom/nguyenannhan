@@ -72,11 +72,19 @@ async function safeApiFetch<T = any>(
   }
 }
 
+export interface FileUploadPayloadItem {
+  fileBase64?: string;
+  mimeType?: string;
+  fileName?: string;
+  textContent?: string;
+}
+
 export async function extractDocumentContent(payload: {
   fileBase64?: string;
   mimeType?: string;
   fileName?: string;
   textContent?: string;
+  files?: FileUploadPayloadItem[];
 }): Promise<ExtractResult> {
   const data = await safeApiFetch<ExtractResult>("/api/extract-pdf", payload, 90000);
 
