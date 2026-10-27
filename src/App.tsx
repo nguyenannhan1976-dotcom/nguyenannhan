@@ -15,7 +15,8 @@ import {
   Plus,
   Clock,
   Zap,
-  Info
+  Info,
+  Volume2
 } from "lucide-react";
 import { FileUploader, FileMetadata } from "./components/FileUploader";
 import { GameSuggestions, GameSuggestionObj } from "./components/GameSuggestions";
@@ -25,6 +26,12 @@ import { Toast } from "./components/Toast";
 import { PublishModal, PublishedGameData } from "./components/PublishModal";
 import { TeacherResultsModal } from "./components/TeacherResultsModal";
 import { StudentPlayer } from "./components/StudentPlayer";
+import { AiQuestionGeneratorModal } from "./components/AiQuestionGeneratorModal";
+import { 
+  PRIMARY_SUBJECTS, 
+  PRIMARY_GRADES, 
+  getTopicsForSubjectAndGrade 
+} from "./data/curriculumTopics";
 import { 
   fetchGameSuggestions, 
   fetchGeneratedGame, 
@@ -126,8 +133,17 @@ function App() {
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showAiQuestionModal, setShowAiQuestionModal] = useState(false);
+  const [prefilledAiData, setPrefilledAiData] = useState<{ topic?: string; grade?: string; subject?: string } | null>(null);
+  const [quickBrowseGrade, setQuickBrowseGrade] = useState("Lớp 4");
+  const [quickBrowseSubject, setQuickBrowseSubject] = useState("Toán");
   const [pinInput, setPinInput] = useState("");
   const [publishedCount, setPublishedCount] = useState<number>(0);
+
+  const openAiQuestionGenerator = (topic?: string, grade?: string, subject?: string) => {
+    setPrefilledAiData(topic ? { topic, grade, subject } : null);
+    setShowAiQuestionModal(true);
+  };
 
   const refreshPublishedCount = () => {
     fetch("/api/published-games")
@@ -163,15 +179,76 @@ function App() {
     setToast({ message, type });
   };
 
+  const playPreviewSound = (type: string) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const playTone = (freq: number, duration: number, delay: number, waveType: OscillatorType = 'sine', gainVal: number = 0.2) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = waveType;
+        osc.frequency.setValueAtTime(freq, now + delay);
+        gain.gain.setValueAtTime(0.0001, now + delay);
+        gain.gain.exponentialRampToValueAtTime(gainVal, now + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + duration + 0.05);
+      };
+
+      if (type === 'correct') {
+        playTone(523.25, 0.16, 0, 'triangle', 0.22);
+        playTone(659.25, 0.16, 0.07, 'triangle', 0.24);
+        playTone(783.99, 0.18, 0.14, 'triangle', 0.26);
+        playTone(1046.50, 0.40, 0.21, 'sine', 0.30);
+      } else if (type === 'wrong') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(130, now + 0.28);
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.setValueAtTime(18, now);
+        lfoGain.gain.setValueAtTime(22, now);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start(now);
+        lfo.stop(now + 0.32);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.32);
+      } else if (type === 'win') {
+        playTone(523.25, 0.20, 0, 'triangle', 0.22);
+        playTone(659.25, 0.20, 0.06, 'triangle', 0.22);
+        playTone(783.99, 0.22, 0.14, 'triangle', 0.25);
+        playTone(1046.50, 0.65, 0.22, 'sine', 0.32);
+        playTone(1318.51, 0.65, 0.26, 'triangle', 0.22);
+      } else {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(950, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      }
+    } catch(e) {}
+  };
+
   const toggleType = (id: string) => {
     setSelectedTypes([id]);
-    if (id === 'suggest') {
-      if (!lessonText || !lessonText.trim()) {
-        showToast("Vui lòng tải ảnh/tài liệu SGK hoặc dán nội dung bài học trước khi xem gợi ý nhé! 💡", "error");
-      } else {
-        handleGenerateSuggestions();
-      }
-    }
+    playPreviewSound('click');
   };
 
   const handleNextStep1 = async () => {
@@ -202,6 +279,8 @@ function App() {
         setSuggestions(res.suggestions);
         setSelectedGame(res.suggestions[0]); // Tự động chọn gợi ý đầu tiên
         setStep(2);
+        playPreviewSound('correct');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         throw new Error("Không nhận được danh sách gợi ý hợp lệ từ AI");
       }
@@ -323,6 +402,17 @@ function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Button: AI Sinh câu hỏi thông minh */}
+          <button
+            onClick={() => setShowAiQuestionModal(true)}
+            className="text-xs font-black text-amber-950 bg-gradient-to-r from-amber-300 via-orange-300 to-amber-400 hover:from-amber-400 hover:to-orange-400 border border-amber-400 px-3 sm:px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98"
+            title="AI tự động biên soạn câu hỏi theo chủ đề và cấp lớp"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-800" />
+            <span className="hidden sm:inline">AI Sinh Câu Hỏi</span>
+            <span className="sm:hidden">Sinh Câu Hỏi</span>
+          </button>
+
           {/* Button: Học sinh vào chơi */}
           <button
             onClick={() => setShowPinModal(true)}
@@ -399,19 +489,135 @@ function App() {
                   </div>
                   
                   <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col gap-7">
-                    {/* Mục 1: Tải file & Xem câu hỏi trích xuất */}
+                    {/* Mục 1: Nguồn Câu hỏi bài tập: AI Sinh hoặc Tải file SGK */}
                     <div>
                       <label className="flex items-center gap-2.5 text-base font-bold tracking-tight mb-3">
                         <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-black shadow-xs">1</span>
                         <span className="text-slate-900 font-black">
-                          Tải lên Sách Giáo Khoa <span className="bg-gradient-to-r from-amber-600 to-rose-600 bg-clip-text text-transparent font-extrabold">(Chọn Nhiều Ảnh Cùng Lúc / PDF / Word)</span>
+                          Nguồn Câu Hỏi Bài Tập <span className="bg-gradient-to-r from-amber-600 to-rose-600 bg-clip-text text-transparent font-extrabold">(Tự Sinh Bằng AI Hoặc Tải Ảnh SGK)</span>
                         </span>
                         {lessonText && (
                           <span className="text-emerald-700 text-xs font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1 shadow-2xs">
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Đã lấy câu hỏi SGK
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Đã có ngân hàng câu hỏi
                           </span>
                         )}
                       </label>
+
+                      {/* Prominent AI Question Generator Hero Box */}
+                      <div className="mb-3.5 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-2 border-indigo-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 border border-white/30 shadow-inner">
+                            🤖
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-black tracking-tight">
+                                Tính năng mới: AI Tự Động Sinh Câu Hỏi Thông Minh
+                              </h4>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[9px] uppercase tracking-wider">
+                                Mới ⚡
+                              </span>
+                            </div>
+                            <p className="text-xs text-indigo-100 font-medium mt-0.5">
+                              Chỉ cần nhập chủ đề (VD: <em>Phép cộng phân số</em>) và cấp lớp (<em>Lớp 1 - 5</em>), AI sẽ tự sinh ngay bộ câu hỏi chuẩn SGK kèm đáp án & lời giải!
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => openAiQuestionGenerator()}
+                          className="px-4 py-2.5 rounded-xl text-xs font-black text-indigo-900 bg-white hover:bg-amber-100 active:scale-98 transition-all cursor-pointer shadow-sm flex items-center gap-1.5 shrink-0 self-stretch sm:self-auto justify-center"
+                        >
+                          <Sparkles className="w-4 h-4 text-indigo-600" />
+                          <span>Mở AI Sinh Câu Hỏi 🚀</span>
+                        </button>
+                      </div>
+
+                      {/* Interactive Quick Topic Explorer Bar */}
+                      <div className="mb-3.5 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-50/70 via-indigo-50/50 to-purple-50/60 border border-indigo-200/80 shadow-2xs space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[11px] font-black text-slate-800 flex items-center gap-1">
+                            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                            Gợi ý chủ đề SGK nhanh (Bấm để mở AI tạo đề):
+                          </span>
+
+                          {/* Grade picker pills */}
+                          <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                            {["Lớp 1", "Lớp 2", "Lớp 3", "Lớp 4", "Lớp 5"].map((gr) => (
+                              <button
+                                key={gr}
+                                type="button"
+                                onClick={() => setQuickBrowseGrade(gr)}
+                                className={cn(
+                                  "px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer",
+                                  quickBrowseGrade === gr
+                                    ? "bg-purple-600 text-white shadow-2xs"
+                                    : "text-slate-600 hover:text-purple-600 hover:bg-slate-50"
+                                )}
+                              >
+                                {gr}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Subject selector pills */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                          {PRIMARY_SUBJECTS.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => setQuickBrowseSubject(s.id)}
+                              className={cn(
+                                "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer border flex items-center gap-1",
+                                quickBrowseSubject === s.id
+                                  ? "bg-indigo-600 text-white border-indigo-700 shadow-2xs"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300"
+                              )}
+                            >
+                              <span>{s.icon}</span>
+                              <span>{s.shortName}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Popular Topics for selected subject + grade */}
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {getTopicsForSubjectAndGrade(quickBrowseSubject, quickBrowseGrade).slice(0, 6).map((item, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => openAiQuestionGenerator(item.name, quickBrowseGrade, quickBrowseSubject)}
+                              className="px-2.5 py-1 rounded-xl text-xs font-medium bg-white hover:bg-amber-100 hover:border-amber-300 hover:text-amber-950 text-slate-700 border border-slate-200/90 transition-all cursor-pointer flex items-center gap-1 shadow-2xs group active:scale-97"
+                              title={`Tạo đề thi cho ${item.name} (${quickBrowseSubject} - ${quickBrowseGrade})`}
+                            >
+                              {item.isHot && <span className="text-[10px]">⭐</span>}
+                              <span className="font-semibold text-xs">{item.name}</span>
+                              <span className="text-[9px] text-slate-500 group-hover:text-amber-800 bg-slate-100 group-hover:bg-amber-200/60 px-1 py-0.2 rounded font-normal">
+                                {item.category}
+                              </span>
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => openAiQuestionGenerator(undefined, quickBrowseGrade, quickBrowseSubject)}
+                            className="px-2 py-1 rounded-xl text-xs font-bold text-purple-700 hover:text-purple-900 bg-white hover:bg-purple-100 border border-purple-200 transition-all cursor-pointer flex items-center gap-0.5 shadow-2xs"
+                          >
+                            <span>Xem tất cả kho SGK...</span>
+                            <Sparkles className="w-3 h-3 text-purple-600" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="flex items-center gap-3 my-3">
+                        <div className="flex-1 h-px bg-slate-200" />
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Hoặc tải ảnh chụp sách giáo khoa / file tài liệu
+                        </span>
+                        <div className="flex-1 h-px bg-slate-200" />
+                      </div>
 
                       <FileUploader 
                         onFileProcessed={(text, meta) => { 
@@ -602,6 +808,58 @@ function App() {
                             ))}
                           </div>
                         </div>
+
+                        {/* Âm thanh vui nhộn trong game */}
+                        <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/90 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-amber-900 flex items-center gap-1.5 uppercase tracking-wide">
+                              <Volume2 className="w-4 h-4 text-amber-600" />
+                              Âm thanh trò chơi vui nhộn (Tự động kích hoạt)
+                            </span>
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                              Đang BẬT 🔊
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-relaxed">
+                            Mỗi game tạo ra đều có âm thanh chuông reo leng keng khi trả lời đúng, tiếng boing hoạt hình khi chọn sai, tiếng lách cách khi bấm nút và nhạc chiến thắng rộn rã!
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-[11px] font-bold text-slate-500">Nghe thử:</span>
+                            <button
+                              type="button"
+                              onClick={() => playPreviewSound('correct')}
+                              className="px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                              title="Tiếng chuông leng keng khi học sinh trả lời đúng"
+                            >
+                              <span>🔔 Chuông đúng</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => playPreviewSound('wrong')}
+                              className="px-2.5 py-1 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                              title="Tiếng boing hoạt hình vui nhộn khi trả lời sai"
+                            >
+                              <span>🤪 Boing ngộ nghĩnh</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => playPreviewSound('click')}
+                              className="px-2.5 py-1 rounded-xl bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                              title="Tiếng bong bóng lách cách khi bấm nút"
+                            >
+                              <span>🫧 Tiếng bấm nút</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => playPreviewSound('win')}
+                              className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                              title="Nhạc chiến thắng ăn mừng hoàn thành trò chơi"
+                            >
+                              <span>🎉 Nhạc chiến thắng</span>
+                            </button>
+                          </div>
+                        </div>
+
                       </div>
                     </div>
 
@@ -901,19 +1159,31 @@ function App() {
 
               {/* STEP 2: Suggestions */}
               {step === 2 && (
-                <div className="space-y-6 flex flex-col flex-1 max-w-4xl mx-auto w-full pb-8">
-                  <div className="text-center">
-                    <h2 className="text-2xl sm:text-3xl font-black mb-2">
-                      <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
-                        Chọn Loại Game
-                      </span>{" "}
-                      <span className="bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-500 bg-clip-text text-transparent">
-                        Bạn Thích Nhất
-                      </span>
-                    </h2>
-                    <p className="text-slate-500 text-sm font-medium">
-                      AI đã phân tích nội dung SGK và gợi ý 3 cấu trúc mini-game tối ưu nhất cho bài học này:
-                    </p>
+                <div className="space-y-6 flex flex-col flex-1 max-w-4xl mx-auto w-full pb-8 animate-in fade-in zoom-in-98 duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-center sm:text-left bg-white/95 backdrop-blur-xs p-5 rounded-3xl border border-indigo-100 shadow-sm">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-black mb-1">
+                        <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                          Chọn Loại Trò Chơi
+                        </span>{" "}
+                        <span className="bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-500 bg-clip-text text-transparent">
+                          Bạn Thích Nhất
+                        </span>
+                      </h2>
+                      <p className="text-slate-500 text-xs sm:text-sm font-medium">
+                        AI đã phân tích nội dung SGK và đề xuất 3 cấu trúc game phù hợp nhất với học sinh:
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateSuggestions}
+                      className="px-4 py-2.5 rounded-xl text-xs font-black text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs self-center sm:self-auto shrink-0 active:scale-95"
+                      title="Yêu cầu AI phân tích lại và đổi 3 thể loại khác"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Đổi 3 gợi ý khác 🔄</span>
+                    </button>
                   </div>
 
                   <GameSuggestions 
@@ -926,7 +1196,7 @@ function App() {
                     <button 
                       type="button"
                       onClick={() => setStep(1)}
-                      className="text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 px-4 py-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                      className="text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 px-4 py-2.5 hover:bg-slate-100 rounded-full transition-colors cursor-pointer flex items-center gap-1.5"
                     >
                       ← Quay lại chỉnh sửa
                     </button>
@@ -935,9 +1205,10 @@ function App() {
                       type="button"
                       onClick={() => handleGenerateGame()}
                       disabled={!selectedGame}
-                      className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-black rounded-full shadow-xl shadow-purple-300/40 flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed text-base cursor-pointer"
+                      className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-black rounded-full shadow-xl shadow-purple-300/40 flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed text-base cursor-pointer active:scale-95"
                     >
-                      Lập Trình Game Này ✨
+                      <span>Lập Trình Game Này Ngay 🚀</span>
+                      <Sparkles className="w-4 h-4 text-amber-300" />
                     </button>
                   </div>
                 </div>
@@ -1028,6 +1299,30 @@ function App() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* AI Question Generator Modal */}
+      {showAiQuestionModal && (
+        <AiQuestionGeneratorModal
+          initialTopic={prefilledAiData?.topic}
+          initialGrade={prefilledAiData?.grade}
+          initialSubject={prefilledAiData?.subject}
+          onClose={() => {
+            setShowAiQuestionModal(false);
+            setPrefilledAiData(null);
+          }}
+          onApplyQuestions={(formattedText, count, topic, grade) => {
+            setLessonText(formattedText);
+            setQuestionCount(count);
+            setGameName(`Đấu Trí ${topic} - ${grade}`);
+            setFileMetadata({
+              fileName: `AI Sinh Câu Hỏi: ${topic} (${grade})`,
+              isScanned: false,
+              numPages: 1
+            });
+            showToast(`🎉 Đã nạp thành công bộ ${count} câu hỏi thông minh từ AI! Thầy cô có thể bấm "Tiếp tục" để tạo game. 🎮`, "success");
+          }}
+        />
       )}
 
     </div>

@@ -164,3 +164,51 @@ export async function fetchAdjustedGame(
     modelUsed: data.modelUsed,
   };
 }
+
+export interface GeneratedQuestionItem {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+  difficulty?: string;
+}
+
+export interface GenerateQuestionsPayload {
+  topic: string;
+  grade?: string;
+  subject?: string;
+  questionCount?: number;
+  questionType?: string;
+  difficulty?: string;
+  curriculumBook?: string;
+  customNotes?: string;
+}
+
+export interface GenerateQuestionsResult {
+  success: boolean;
+  topic: string;
+  grade: string;
+  subject: string;
+  questionCount: number;
+  questions: GeneratedQuestionItem[];
+  formattedText: string;
+  modelUsed?: string;
+}
+
+export async function fetchGeneratedQuestions(
+  payload: GenerateQuestionsPayload
+): Promise<GenerateQuestionsResult> {
+  const data = await safeApiFetch<GenerateQuestionsResult>(
+    "/api/generate-questions",
+    payload,
+    90000
+  );
+
+  if (!Array.isArray(data.questions) || data.questions.length === 0) {
+    throw new Error("AI không trả về danh sách câu hỏi hợp lệ. Vui lòng thử lại!");
+  }
+
+  return data;
+}
+

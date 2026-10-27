@@ -16,11 +16,11 @@ app.use(express.json({ limit: "60mb" }));
 app.use(express.urlencoded({ extended: true, limit: "60mb" }));
 
 const FALLBACK_MODELS = [
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
-  "gemini-3.8-flash",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
   "gemini-4-argon",
   "gemini-3.1-pro-preview"
 ];
@@ -192,47 +192,123 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
     window.webkitAudioContext = ProxiedAudioContext;
   }
 
-  // 2. High-performance Instant Sound Engine
+  // 2. High-performance Cheerful Web Audio Sound Engine (100% offline, zero lag, joyful school sounds)
+  window.__isGameMuted = false;
+
   window.playGameSound = function(type) {
+    if (window.__isGameMuted) return;
     try {
       var ctx = getSharedAudioCtx();
       if (!ctx) return;
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(function(){});
+      }
       var now = ctx.currentTime;
 
-      if (type === 'correct') {
+      // Play helper: tone generator with envelope
+      function playTone(freq, duration, delay, waveType, peakGain) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = waveType || 'sine';
+        osc.frequency.setValueAtTime(freq, now + delay);
+        gain.gain.setValueAtTime(0.0001, now + delay);
+        gain.gain.exponentialRampToValueAtTime(peakGain || 0.2, now + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + duration + 0.05);
+      }
+
+      var normType = String(type || '').toLowerCase();
+
+      if (normType === 'correct' || normType === 'right' || normType === 'success') {
+        // Joyful ascending arpeggio chime: C5 -> E5 -> G5 -> C6 (sparkling celebration bells)
+        playTone(523.25, 0.16, 0, 'triangle', 0.22);
+        playTone(659.25, 0.16, 0.07, 'triangle', 0.24);
+        playTone(783.99, 0.18, 0.14, 'triangle', 0.26);
+        playTone(1046.50, 0.40, 0.21, 'sine', 0.30);
+        // Sparkle harmonic
+        playTone(2093.00, 0.25, 0.25, 'sine', 0.10);
+      } else if (normType === 'wrong' || normType === 'incorrect' || normType === 'error' || normType === 'fail') {
+        // Cute cartoon boing / spring wobble (low pitch slide with funny vibrato, encouraging not harsh)
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(523.25, now);
-        osc.frequency.setValueAtTime(659.25, now + 0.08);
-        osc.frequency.setValueAtTime(783.99, now + 0.16);
-        gain.gain.setValueAtTime(0.16, now);
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(130, now + 0.28);
+        
+        var lfo = ctx.createOscillator();
+        var lfoGain = ctx.createGain();
+        lfo.frequency.setValueAtTime(18, now);
+        lfoGain.gain.setValueAtTime(22, now);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start(now);
+        lfo.stop(now + 0.32);
+
+        gain.gain.setValueAtTime(0.18, now);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.32);
-      } else if (type === 'wrong') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(330, now);
-        osc.frequency.setValueAtTime(220, now + 0.12);
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
-        osc.start(now);
-        osc.stop(now + 0.26);
+      } else if (normType === 'start' || normType === 'intro' || normType === 'begin') {
+        // Cheerful game intro fanfare: G4 -> C5 -> E5 -> G5
+        playTone(392.00, 0.12, 0, 'triangle', 0.20);
+        playTone(523.25, 0.14, 0.09, 'triangle', 0.22);
+        playTone(659.25, 0.16, 0.18, 'triangle', 0.24);
+        playTone(783.99, 0.45, 0.27, 'sine', 0.28);
+      } else if (normType === 'win' || normType === 'victory' || normType === 'complete' || normType === 'finish') {
+        // Grand victory celebration fanfare (Tadaaa! C5-E5-G5-C6 with confetti chime chords)
+        playTone(523.25, 0.20, 0, 'triangle', 0.22);
+        playTone(659.25, 0.20, 0.06, 'triangle', 0.22);
+        playTone(783.99, 0.22, 0.14, 'triangle', 0.25);
+        playTone(1046.50, 0.65, 0.22, 'sine', 0.32);
+        playTone(1318.51, 0.65, 0.26, 'triangle', 0.22);
+        playTone(1567.98, 0.40, 0.45, 'sine', 0.16);
+        playTone(2093.00, 0.50, 0.55, 'sine', 0.20);
+      } else if (normType === 'streak' || normType === 'combo') {
+        // Rapid magical sparkle chime for streak
+        playTone(659.25, 0.10, 0, 'sine', 0.18);
+        playTone(783.99, 0.10, 0.06, 'sine', 0.20);
+        playTone(1046.50, 0.12, 0.12, 'sine', 0.22);
+        playTone(1318.51, 0.25, 0.18, 'sine', 0.24);
+      } else if (normType === 'tick') {
+        // Gentle woodblock clock tick
+        playTone(1200, 0.04, 0, 'sine', 0.08);
       } else {
+        // Default 'click' / 'pop' / 'tap' / 'select': Juicy cute bubble pop!
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, now);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+        osc.frequency.setValueAtTime(950, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.07);
+        osc.stop(now + 0.06);
       }
     } catch(e) {}
   };
 
   window.playSound = window.playGameSound;
   window.playSoundSafely = window.playGameSound;
+  window.playAudio = window.playGameSound;
+  window.playSfx = window.playGameSound;
+  window.sfx = {
+    correct: function() { window.playGameSound('correct'); },
+    wrong: function() { window.playGameSound('wrong'); },
+    click: function() { window.playGameSound('click'); },
+    pop: function() { window.playGameSound('click'); },
+    start: function() { window.playGameSound('start'); },
+    win: function() { window.playGameSound('win'); },
+    victory: function() { window.playGameSound('win'); },
+    streak: function() { window.playGameSound('streak'); },
+    tick: function() { window.playGameSound('tick'); }
+  };
 
   // 3. Question & Answer Detailed Tracker
   window.__eduAnswersHistory = [];
@@ -272,7 +348,7 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
     }
   };
 
-  // Pre-warm audio on first interaction
+  // Pre-warm audio on first interaction & Auto Attach Click Sounds
   function warmUp() {
     getSharedAudioCtx();
     window.removeEventListener('pointerdown', warmUp);
@@ -280,6 +356,50 @@ export function cleanAndValidateHtml(raw: string): { html: string; isValid: bool
   }
   window.addEventListener('pointerdown', warmUp, { passive: true });
   window.addEventListener('keydown', warmUp, { passive: true });
+
+  // Floating Sound Toggle & Auto Click Sounds when DOM is ready
+  function initGameAudioUI() {
+    try {
+      // Auto attach joyful pop sound to any button click
+      document.addEventListener('click', function(e) {
+        var target = e.target;
+        if (target && (target.tagName === 'BUTTON' || target.closest('button') || target.classList.contains('option-btn') || target.getAttribute('role') === 'button')) {
+          if (target.id !== 'edu-sound-toggle') {
+            window.playGameSound('click');
+          }
+        }
+      }, true);
+
+      // Create cute floating sound toggle (🔊 / 🔇)
+      if (!document.getElementById('edu-sound-toggle')) {
+        var btn = document.createElement('button');
+        btn.id = 'edu-sound-toggle';
+        btn.type = 'button';
+        btn.title = 'Bật / Tắt âm thanh trò chơi';
+        btn.innerHTML = '🔊';
+        btn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:99999;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.95);border:2px solid #f59e0b;box-shadow:0 3px 10px rgba(0,0,0,0.15);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.15s ease;outline:none;user-select:none;backdrop-filter:blur(4px);';
+        btn.onmouseenter = function() { btn.style.transform = 'scale(1.12)'; };
+        btn.onmouseleave = function() { btn.style.transform = 'scale(1)'; };
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          window.__isGameMuted = !window.__isGameMuted;
+          btn.innerHTML = window.__isGameMuted ? '🔇' : '🔊';
+          btn.style.borderColor = window.__isGameMuted ? '#94a3b8' : '#f59e0b';
+          btn.style.opacity = window.__isGameMuted ? '0.7' : '1';
+          if (!window.__isGameMuted) {
+            window.playGameSound('click');
+          }
+        };
+        document.body.appendChild(btn);
+      }
+    } catch(e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGameAudioUI);
+  } else {
+    initGameAudioUI();
+  }
 })();
 </script>`;
 
@@ -760,27 +880,27 @@ Hãy trình bày rõ ràng, mạch lạc, dễ đọc bằng tiếng Việt.`;
 function getSmartFallbackSuggestions(lessonText: string) {
   const lower = (lessonText || "").toLowerCase();
   
-  if (lower.includes("toán") || lower.includes("phương trình") || lower.includes("mệnh đề") || lower.includes("tập hợp") || lower.includes("số") || lower.includes("hình")) {
+  if (lower.includes("toán") || lower.includes("phép") || lower.includes("phân số") || lower.includes("cộng") || lower.includes("trừ") || lower.includes("nhân") || lower.includes("chia") || lower.includes("hình") || lower.includes("diện tích") || lower.includes("chu vi") || lower.includes("số học") || lower.includes("phương trình") || lower.includes("mệnh đề")) {
     return [
       {
-        loai: "Trắc nghiệm Tính Nhanh",
-        moTa: "Thử thách trắc nghiệm 4 phương án tương tác nhanh, giải thích chi tiết từng bước tính toán bám sát SGK.",
+        loai: "Trắc nghiệm Tính Nhanh SGK",
+        moTa: "Thử thách trắc nghiệm 4 phương án tương tác nhanh, có âm thanh chuông đúng và giải thích bước giải chi tiết bám sát SGK.",
         doKho: "Dễ",
         thoiGian: "5 phút",
         icon: "⚡",
         mauSac: "from-amber-400 to-orange-500",
       },
       {
-        loai: "Nối Cặp Định Lý & Mệnh Đề",
-        moTa: "Nối các biểu thức, khái niệm và công thức tương ứng ở hai cột bằng cơ chế Click-to-Pair mượt mà 60 FPS.",
+        loai: "Nối Cặp Phép Tính & Kết Quả",
+        moTa: "Nối phép tính với kết quả hoặc công thức tương ứng ở hai cột bằng cơ chế Click-to-Pair mượt mà 60 FPS.",
         doKho: "Trung bình",
-        thoiGian: "7 phút",
+        thoiGian: "6 phút",
         icon: "🗂️",
         mauSac: "from-emerald-400 to-teal-500",
       },
       {
         loai: "Đúng hay Sai Thử Thách",
-        moTa: "Phân tích các nhận định toán học, bấm Đúng hoặc Sai trong 1 chạm kèm gợi ý lời giải khắc sâu kiến thức.",
+        moTa: "Phân tích nhanh các mệnh đề toán học, bấm Đúng hoặc Sai trong 1 chạm kèm tiếng boing hoạt hình và gợi ý khắc phục.",
         doKho: "Dễ",
         thoiGian: "4 phút",
         icon: "⚖️",
@@ -789,26 +909,84 @@ function getSmartFallbackSuggestions(lessonText: string) {
     ];
   }
 
+  if (lower.includes("tiếng việt") || lower.includes("danh từ") || lower.includes("động từ") || lower.includes("tính từ") || lower.includes("so sánh") || lower.includes("nhân hóa") || lower.includes("chính tả") || lower.includes("văn") || lower.includes("đọc") || lower.includes("từ vựng")) {
+    return [
+      {
+        loai: "Trắc nghiệm Tiếng Việt & Từ Vựng",
+        moTa: "Đố vui trắc nghiệm nhận diện biện pháp tu từ, từ loại, mở rộng vốn từ bám sát bài đọc SGK sinh động.",
+        doKho: "Dễ",
+        thoiGian: "5 phút",
+        icon: "📖",
+        mauSac: "from-rose-400 to-pink-500",
+      },
+      {
+        loai: "Điền Từ Vào Chỗ Trống",
+        moTa: "Ngân hàng từ khóa sinh động, học sinh bấm chọn từ thích hợp để hoàn thiện câu thơ, thành ngữ chuẩn xác.",
+        doKho: "Trung bình",
+        thoiGian: "6 phút",
+        icon: "📝",
+        mauSac: "from-indigo-500 to-purple-600",
+      },
+      {
+        loai: "Phân Loại Từ Ngữ & Ngữ Pháp",
+        moTa: "Phân chia các từ vào nhóm Danh từ, Động từ, Tính từ hoặc Từ đồng nghĩa - trái nghĩa mượt mà trực quan.",
+        doKho: "Trung bình",
+        thoiGian: "7 phút",
+        icon: "🧩",
+        mauSac: "from-emerald-400 to-teal-500",
+      },
+    ];
+  }
+
+  if (lower.includes("khoa học") || lower.includes("tự nhiên") || lower.includes("nước") || lower.includes("không khí") || lower.includes("ánh sáng") || lower.includes("sinh vật") || lower.includes("thực vật") || lower.includes("động vật") || lower.includes("môi trường")) {
+    return [
+      {
+        loai: "Khám Phá Khoa Học Tương Tác",
+        moTa: "Hệ thống câu hỏi trắc nghiệm khám phá quy luật tự nhiên, vòng tuần hoàn của nước và thế giới sinh vật xung quanh.",
+        doKho: "Dễ",
+        thoiGian: "5 phút",
+        icon: "🔬",
+        mauSac: "from-emerald-400 to-teal-500",
+      },
+      {
+        loai: "Đúng hay Sai Khoa Học Thường Thức",
+        moTa: "Phán đoán hiện tượng khoa học Đúng hay Sai, củng cố kiến thức thực tế với giải thích khoa học dễ hiểu.",
+        doKho: "Dễ",
+        thoiGian: "4 phút",
+        icon: "🌱",
+        mauSac: "from-blue-400 to-indigo-500",
+      },
+      {
+        loai: "Nối Cặp Khái Niệm & Hiện Tượng",
+        moTa: "Nối đặc tính của chất, nguồn năng lượng và hiện tượng tự nhiên tương ứng với hình ảnh minh họa sinh động.",
+        doKho: "Trung bình",
+        thoiGian: "6 phút",
+        icon: "🌍",
+        mauSac: "from-amber-400 to-orange-500",
+      },
+    ];
+  }
+
   return [
     {
-      loai: "Trắc nghiệm Vui Nhộn",
-      moTa: "Hệ thống câu hỏi trắc nghiệm 4 lựa chọn sinh động, màu sắc tươi vui kèm âm thanh chúc mừng.",
+      loai: "Trắc nghiệm Vui Nhộn Bám Sát SGK",
+      moTa: "Hệ thống câu hỏi 4 lựa chọn trực quan, âm thanh vui tươi, phản hồi tức thì và chỉ rõ câu sai kèm gợi ý giải.",
       doKho: "Dễ",
       thoiGian: "5 phút",
       icon: "🎯",
       mauSac: "from-indigo-500 to-purple-600",
     },
     {
-      loai: "Nối Cặp Thuật Ngữ SGK",
-      moTa: "Ghép đôi các cặp thẻ từ khóa, định nghĩa và bài tập tương ứng, rèn luyện tư duy phản xạ nhanh.",
+      loai: "Nối Cặp Thuật Ngữ & Khái Niệm",
+      moTa: "Ghép đôi các thẻ từ khóa, kiến thức cốt lõi và bài tập bằng cơ chế Click-to-Pair mượt mà 60 FPS.",
       doKho: "Trung bình",
       thoiGian: "6 phút",
       icon: "🧩",
       mauSac: "from-emerald-400 to-teal-500",
     },
     {
-      loai: "Đúng hay Sai & Khám Phá",
-      moTa: "Đọc nhận định từ bài học SGK và đưa ra quyết định Đúng / Sai, kèm lời giải thích chi tiết cho từng câu.",
+      loai: "Đúng hay Sai & Khám Phá Bài Học",
+      moTa: "Đọc nhận định từ bài học SGK và đưa ra quyết định Đúng / Sai trong 1 chạm kèm lời giải thích khắc sâu kiến thức.",
       doKho: "Dễ",
       thoiGian: "4 phút",
       icon: "⚖️",
@@ -817,7 +995,7 @@ function getSmartFallbackSuggestions(lessonText: string) {
   ];
 }
 
-// 3. Generate suggestions (Fail-proof)
+// 3. Generate suggestions (Ultra-fast & Fail-proof)
 app.post("/api/generate-suggestions", async (req, res) => {
   try {
     const { lessonText } = req.body;
@@ -825,28 +1003,38 @@ app.post("/api/generate-suggestions", async (req, res) => {
       return res.status(400).json({ error: "Thiếu nội dung giáo án" });
     }
 
-    const trimmedLesson = lessonText.trim().substring(0, 3500);
+    const trimmedLesson = lessonText.trim().substring(0, 1500);
 
-    const prompt = `Dựa vào nội dung giáo án và các câu hỏi đã trích xuất bên dưới, hãy đề xuất 3 loại mini game giáo dục (HTML5) phù hợp nhất.
-Trả về đúng 1 JSON array gồm đúng 3 object với cấu trúc:
+    const prompt = `Bạn là Chuyên gia Giáo dục Tiểu học tại Trường Tiểu học Lạc Long Quân.
+Dựa vào nội dung giáo án và câu hỏi bên dưới, hãy đề xuất đúng 3 loại mini game HTML5 vui nhộn, hấp dẫn và phù hợp nhất cho học sinh.
+Trả về đúng 1 JSON array gồm đúng 3 object:
 [
   {
-    "loai": "Tên loại game (vd: Trắc nghiệm, Nối cặp, Đúng/Sai, Điền từ...)",
-    "moTa": "Mô tả ngắn gọn cách chơi hấp dẫn bám sát nội dung bài học (1-2 câu)",
+    "loai": "Tên loại game ngắn gọn (vd: Trắc nghiệm Tính Nhanh, Nối Cặp Khái Niệm, Đúng/Sai Thử Thách, Điền Từ)",
+    "moTa": "Mô tả ngắn gọn cách chơi hấp dẫn (1-2 câu)",
     "doKho": "Dễ" | "Trung bình" | "Khó",
     "thoiGian": "4 phút" | "5 phút" | "7 phút",
-    "icon": "1 emoji phù hợp",
-    "mauSac": "from-amber-400 to-orange-500" hoặc "from-emerald-400 to-teal-500" hoặc "from-indigo-500 to-purple-600"
+    "icon": "1 emoji vui nhộn",
+    "mauSac": "from-amber-400 to-orange-500" hoặc "from-emerald-400 to-teal-500" hoặc "from-indigo-500 to-purple-600" hoặc "from-rose-400 to-pink-500"
   }
 ]
-
-BẮT BUỘC CHỈ TRẢ VỀ JSON ARRAY HỢP LỆ, KHÔNG BỌC TRONG MARKDOWN HOẶC VĂN BẢN KHÁC.
+BẮT BUỘC CHỈ TRẢ VỀ JSON ARRAY HỢP LỆ.
 
 NỘI DUNG GIÁO ÁN VÀ BÀI TẬP:
 ${trimmedLesson}`;
 
     try {
-      const result = await callGemini(prompt, undefined, { responseMimeType: "application/json" });
+      // 4.5s timeout race for ultra-smooth instant user experience
+      const aiPromise = callGemini([{ text: prompt }], "Bạn là Chuyên gia Giáo dục đề xuất mini game dạng JSON array.", {
+        temperature: 0.5,
+        maxOutputTokens: 500,
+      });
+
+      const timeoutPromise = new Promise<{ text: string; modelUsed: string }>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout AI suggestion")), 4500)
+      );
+
+      const result = await Promise.race([aiPromise, timeoutPromise]);
       let cleanJson = result.text.trim();
       cleanJson = cleanJson.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 
@@ -859,7 +1047,7 @@ ${trimmedLesson}`;
 
       return res.json({ success: true, suggestions: data, modelUsed: result.modelUsed });
     } catch (aiErr: any) {
-      console.warn("[generate-suggestions] AI call error, applying smart educational fallback:", aiErr.message || aiErr);
+      console.warn("[generate-suggestions] Fast fallback triggered:", aiErr.message || aiErr);
       const fallback = getSmartFallbackSuggestions(lessonText);
       return res.json({ success: true, suggestions: fallback, modelUsed: "smart-educational-fallback" });
     }
@@ -867,6 +1055,503 @@ ${trimmedLesson}`;
     console.error("[API generate-suggestions error]", err);
     const fallback = getSmartFallbackSuggestions(req.body?.lessonText || "");
     res.json({ success: true, suggestions: fallback, modelUsed: "smart-educational-fallback" });
+  }
+});
+
+function getSmartFallbackQuestions(topic: string, grade: string, subject: string, count: number): any[] {
+  const safeTopic = topic || "Kiến thức bài học SGK";
+  const safeGrade = grade || "Tiểu học";
+  const safeSubject = subject || "Toán";
+  const lowerSub = safeSubject.toLowerCase();
+  
+  let sampleTemplates: any[] = [];
+
+  if (lowerSub.includes("toán")) {
+    sampleTemplates = [
+      {
+        q: `Trong bài học "${safeTopic}" (${safeSubject} ${safeGrade}), khi thực hiện giải bài toán, bước đầu tiên quan trọng nhất là gì?`,
+        opts: [
+          "A. Đọc kỹ đề bài, xác định dữ kiện đã cho và câu hỏi cần tìm",
+          "B. Đoán kết quả mà không cần tính toán",
+          "C. Chỉ quan sát các số liệu cuối cùng",
+          "D. Bỏ qua bước kiểm tra lại kết quả"
+        ],
+        ans: "A",
+        exp: "Đọc kỹ đề và xác định đúng dữ kiện đã cho cùng yêu cầu bài toán là nền tảng cốt lõi của môn Toán.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Áp dụng quy tắc của chủ đề "${safeTopic}", phương án nào dưới đây là ĐÚNG về phương pháp tính?`,
+        opts: [
+          "A. Thực hiện theo đúng thứ tự phép tính và quy tắc toán học chuẩn",
+          "B. Có thể tính tùy tiện từ phải sang trái",
+          "C. Không cần đưa về cùng một đơn vị đo khi tính",
+          "D. Luôn làm tròn số ngay từ bước đầu tiên"
+        ],
+        ans: "A",
+        exp: "Tuân thủ thứ tự thực hiện phép tính và cùng đơn vị đo giúp kết quả luôn chính xác 100%.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Em hãy chọn khẳng định ĐÚNG nhất về ý nghĩa thực tế của chủ đề "${safeTopic}":`,
+        opts: [
+          "A. Giúp học sinh tính toán chuẩn xác, ứng dụng vào mua sắm, đo lường và đời sống",
+          "B. Chỉ dùng để ghi chép vào vở mà không áp dụng được vào thực tế",
+          "C. Kết quả tính toán không cần độ chính xác cao",
+          "D. Không liên quan gì đến các lớp học tiếp theo"
+        ],
+        ans: "A",
+        exp: "Toán học tiểu học gắn liền mật thiết với các hoạt động đời sống thực tế của học sinh.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Khi gặp một bài toán nâng cao liên quan đến "${safeTopic}", cách tư duy hiệu quả nhất là:`,
+        opts: [
+          "A. Tóm tắt bài toán bằng sơ đồ đoạn thẳng hoặc bảng số liệu rồi tìm lời giải",
+          "B. Bỏ cuộc ngay khi chưa thử tính toán",
+          "C. Chọn một đáp án bất kỳ mà không cần suy luận",
+          "D. Đổi đề bài sang bài toán khác dễ hơn"
+        ],
+        ans: "A",
+        exp: "Tóm tắt bài toán bằng sơ đồ đoạn thẳng hoặc bảng giúp học sinh nhìn rõ mối quan hệ giữa các đại lượng.",
+        diff: "Vận dụng"
+      },
+      {
+        q: `Sau khi giải xong bài tập về "${safeTopic}", thao tác nào sau đây thể hiện học sinh cẩn thận?`,
+        opts: [
+          "A. Thử lại kết quả vào đề bài và ghi rõ danh số (đơn vị đo) kèm đáp số",
+          "B. Đóng vở ngay lập tức mà không cần rà soát lại",
+          "C. Tẩy xóa lung tung trên bài làm",
+          "D. Không cần ghi đáp số"
+        ],
+        ans: "A",
+        exp: "Kiểm tra lại bài làm và ghi đầy đủ đơn vị đo là thói quen học tập rất đáng khen của học sinh Lạc Long Quân.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else if (lowerSub.includes("tiếng việt") || lowerSub.includes("văn")) {
+    sampleTemplates = [
+      {
+        q: `Trong bài học "${safeTopic}" (${safeSubject} ${safeGrade}), nội dung kiến thức trọng tâm là gì?`,
+        opts: [
+          "A. Nắm vững quy tắc chính tả, nghĩa của từ ngữ và cách diễn đạt trong sáng",
+          "B. Chỉ cần nhớ mặt chữ mà không cần hiểu nghĩa",
+          "C. Viết hoa tùy ý không theo quy tắc ngữ pháp",
+          "D. Dùng từ ngữ thiếu lịch sự khi giao tiếp"
+        ],
+        ans: "A",
+        exp: "Môn Tiếng Việt rèn luyện khả năng dùng từ, đặt câu chuẩn xác và bồi dưỡng tình yêu tiếng mẹ đẻ.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Để câu văn trở nên sinh động và giàu hình ảnh khi học về "${safeTopic}", em nên:`,
+        opts: [
+          "A. Vận dụng linh hoạt các từ ngữ gợi cảm và biện pháp tu từ phù hợp (so sánh, nhân hóa)",
+          "B. Chỉ dùng các câu ngắn cụt lủn không có cảm xúc",
+          "C. Lặp lại một từ nhiều lần trong cùng một câu",
+          "D. Không sử dụng dấu câu ngăn cách các vế"
+        ],
+        ans: "A",
+        exp: "Sử dụng từ ngữ gợi tả và hình ảnh so sánh, nhân hóa giúp bài văn thêm sinh động và giàu cảm xúc.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Khi viết câu liên quan đến chủ đề "${safeTopic}", việc sử dụng dấu câu đúng có tác dụng gì?`,
+        opts: [
+          "A. Giúp câu văn rõ ràng, mạch lạc, người đọc hiểu đúng ý người viết",
+          "B. Dấu câu chỉ dùng để trang trí không có ý nghĩa gì",
+          "C. Có thể bỏ qua dấu chấm ở cuối câu",
+          "D. Đặt dấu câu ngẫu nhiên ở vị trí bất kỳ"
+        ],
+        ans: "A",
+        exp: "Dấu câu giúp ngắt nghỉ nhịp nhàng và thể hiện đúng mục đích nói của câu (kể, hỏi, cảm thán, cầu khiến).",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Áp dụng chủ đề "${safeTopic}", từ ngữ nào sau đây thể hiện thái độ tích cực và chuẩn mực?`,
+        opts: [
+          "A. Lễ phép, chăm chỉ, yêu thương bạn bè và kính trọng thầy cô",
+          "B. Lười biếng, hay cãi lời người lớn",
+          "C. Tự ti, ngại giao tiếp với mọi người",
+          "D. Nói trống không khi nói chuyện với người lớn"
+        ],
+        ans: "A",
+        exp: "Vốn từ ngữ bồi dưỡng nhân cách tốt đẹp và giao tiếp văn minh cho học sinh.",
+        diff: "Vận dụng"
+      },
+      {
+        q: `Tìm cách diễn đạt đúng và hay nhất về chủ đề "${safeTopic}":`,
+        opts: [
+          "A. Câu văn đầy đủ thành phần chủ ngữ - vị ngữ, dùng từ chuẩn xác",
+          "B. Câu thiếu chủ ngữ không rõ ai thực hiện hành động",
+          "C. Câu sai quy tắc chính tả cơ bản",
+          "D. Dùng từ địa phương gây hiểu nhầm trong văn bản chung"
+        ],
+        ans: "A",
+        exp: "Một câu văn chuẩn mực cần có đầy đủ thành phần ngữ pháp và dùng từ đúng ngữ cảnh.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else if (lowerSub.includes("khoa học") || lowerSub.includes("tự nhiên")) {
+    sampleTemplates = [
+      {
+        q: `Trong chủ đề "${safeTopic}" (${safeSubject} ${safeGrade}), hiện tượng tự nhiên hoặc quy luật nào sau đây là ĐÚNG?`,
+        opts: [
+          "A. Các sự vật, hiện tượng trong tự nhiên luôn có mối liên hệ mật thiết và vận động không ngừng",
+          "B. Tự nhiên tồn tại độc lập hoàn toàn và không chịu tác động nào",
+          "C. Con người không cần phải bảo vệ môi trường xung quanh",
+          "D. Nguồn tài nguyên thiên nhiên là vô tận không bao giờ cạn kiệt"
+        ],
+        ans: "A",
+        exp: "Khoa học chứng minh mọi sinh vật và môi trường sống luôn có sự gắn kết và tương tác lẫn nhau.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Để bảo vệ sức khỏe và môi trường sống liên quan đến chủ đề "${safeTopic}", hành động nào là đúng đắn?`,
+        opts: [
+          "A. Giữ gìn vệ sinh sạch sẽ, tiết kiệm tài nguyên và bảo vệ cây xanh",
+          "B. Xả rác bừa bãi ra sông ngòi và đường phố",
+          "C. Lãng phí nước sạch và điện sinh hoạt",
+          "D. Bẻ cành hái hoa nơi công cộng"
+        ],
+        ans: "A",
+        exp: "Bảo vệ môi trường và sử dụng tiết kiệm tài nguyên là trách nhiệm của mỗi công dân nhỏ tuổi.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Hiện tượng khoa học nào sau đây diễn ra đúng như đã học trong chủ đề "${safeTopic}"?`,
+        opts: [
+          "A. Tuân theo các quy luật vật lý, hóa học hoặc sinh học tự nhiên",
+          "B. Tự nhiên thay đổi do các yếu tố mê tín dị đoan",
+          "C. Mọi chất đều có tính chất giống hệt nhau",
+          "D. Nhiệt độ không ảnh hưởng đến sự biến đổi trạng thái của chất"
+        ],
+        ans: "A",
+        exp: "Kiến thức khoa học giúp các em hiểu rõ bản chất của các hiện tượng diễn ra xung quanh mình.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Khi tiến hành quan sát hoặc làm thí nghiệm đơn giản về "${safeTopic}", em cần chú ý điều gì?`,
+        opts: [
+          "A. Tuân thủ hướng dẫn an toàn của thầy cô, quan sát cẩn thận và ghi chép trung thực",
+          "B. Tự ý chạm vào hóa chất hoặc nguồn nhiệt khi chưa được phép",
+          "C. Vừa làm thí nghiệm vừa đùa nghịch với bạn",
+          "D. Bịa đặt số liệu khi chưa quan sát thực tế"
+        ],
+        ans: "A",
+        exp: "An toàn và trung thực là hai phẩm chất cốt lõi khi học tập và thực hành khoa học.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else if (lowerSub.includes("lịch sử") || lowerSub.includes("địa lý") || lowerSub.includes("địa lí")) {
+    sampleTemplates = [
+      {
+        q: `Nội dung cốt lõi của chủ đề "${safeTopic}" (${safeSubject} ${safeGrade}) nhắc nhở chúng ta điều gì?`,
+        opts: [
+          "A. Tự hào về truyền thống yêu nước, cội nguồn dân tộc và vẻ đẹp gấm vóc của quê hương Việt Nam",
+          "B. Lịch sử là những câu chuyện không còn giá trị trong hiện tại",
+          "C. Không cần tìm hiểu về các vùng miền trên đất nước",
+          "D. Quên đi công lao của thế hệ cha ông đi trước"
+        ],
+        ans: "A",
+        exp: "Lịch sử và Địa lý bồi dưỡng lòng yêu nước, niềm tự hào dân tộc và ý thức bảo vệ chủ quyền Tổ quốc.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Khi tìm hiểu về địa lý hoặc di tích lịch sử trong "${safeTopic}", phương tiện trực quan nào hỗ trợ tốt nhất?`,
+        opts: [
+          "A. Bản đồ, lược đồ, quả Địa cầu và tranh ảnh tư liệu lịch sử",
+          "B. Chỉ dùng trí tưởng tượng mà không cần bản đồ",
+          "C. Đọc các thông tin chưa được kiểm chứng trên mạng xã hội",
+          "D. Bỏ qua các mốc thời gian lịch sử quan trọng"
+        ],
+        ans: "A",
+        exp: "Bản đồ và hiện vật lịch sử giúp chúng ta hình dung chính xác không gian và thời gian diễn ra sự kiện.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Học sinh Trường Tiểu học Lạc Long Quân thể hiện lòng biết ơn các thế hệ cha anh qua chủ đề "${safeTopic}" bằng cách nào?`,
+        opts: [
+          "A. Chăm ngoan, học giỏi, giữ gìn cảnh quan di tích và rèn luyện đạo đức tốt",
+          "B. Vẽ bậy lên các bia đá và di tích lịch sử",
+          "C. Không tham gia các hoạt động đền ơn đáp nghĩa",
+          "D. Thờ ơ với các ngày lễ kỷ niệm của dân tộc"
+        ],
+        ans: "A",
+        exp: "Học tập tốt và gìn giữ truyền thống là hành động thiết thực nhất để tri ân các thế hệ tiền nhân.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else if (lowerSub.includes("tiếng anh") || lowerSub.includes("english")) {
+    sampleTemplates = [
+      {
+        q: `Which sentence is CORRECT regarding the topic "${safeTopic}" (${safeSubject} - ${safeGrade})?`,
+        opts: [
+          "A. Using correct vocabulary and sentence patterns in everyday communication.",
+          "B. English words do not follow any spelling or pronunciation rules.",
+          "C. We only need to memorize grammar without practicing speaking.",
+          "D. Pronunciation does not matter when talking to others."
+        ],
+        ans: "A",
+        exp: "Practicing correct pronunciation and sentence structures helps students communicate confidently.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Choose the best response when practicing "${safeTopic}":`,
+        opts: [
+          "A. Practice speaking fluently and listening attentively to teachers and friends.",
+          "B. Stay quiet and never try to speak English.",
+          "C. Guess words randomly without looking at pictures.",
+          "D. Speak very fast without clear pronunciation."
+        ],
+        ans: "A",
+        exp: "Listening and repeating actively is the most effective way to master primary English.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `In the lesson "${safeTopic}", which activity helps you remember words longer?`,
+        opts: [
+          "A. Playing interactive vocabulary games and using flashcards with pictures.",
+          "B. Copying words without understanding their meanings.",
+          "C. Forgetting to review new words after class.",
+          "D. Refusing to sing English songs."
+        ],
+        ans: "A",
+        exp: "Games and visual flashcards create joy and long-term memory for young language learners.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else if (lowerSub.includes("tin học")) {
+    sampleTemplates = [
+      {
+        q: `Trong bài học "${safeTopic}" (${safeSubject} ${safeGrade}), quy tắc an toàn và văn minh khi dùng máy tính là gì?`,
+        opts: [
+          "A. Giữ đúng tư thế ngồi, bảo vệ mắt và không truy cập vào các trang web lạ",
+          "B. Ngồi quá sát màn hình và chơi game liên tục nhiều giờ",
+          "C. Chia sẻ mật khẩu tài khoản cho người lạ trên mạng",
+          "D. Đập mạnh tay lên bàn phím khi máy tính bị chậm"
+        ],
+        ans: "A",
+        exp: "Tuân thủ an toàn vệ sinh lao động số và bảo mật thông tin cá nhân là kỹ năng sống rất quan trọng.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Khi thực hành phần mềm trong chủ đề "${safeTopic}", thao tác nào giúp em không bị mất dữ liệu bài tập?`,
+        opts: [
+          "A. Thường xuyên nhấn nút Lưu (Save / Ctrl+S) vào đúng thư mục của mình",
+          "B. Tắt máy đột ngột bằng cách rút dây cắm điện",
+          "C. Xóa các tệp tin trong thư mục của bạn khác",
+          "D. Đặt tên tệp tùy tiện có dấu cách không kiểm soát"
+        ],
+        ans: "A",
+        exp: "Thói quen lưu bài (Save) thường xuyên giúp học sinh bảo vệ thành quả học tập của mình.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Tư duy máy tính và lập trình trong "${safeTopic}" rèn luyện cho học sinh điều gì?`,
+        opts: [
+          "A. Khả năng tư duy logic, giải quyết vấn đề theo từng bước rõ ràng và sáng tạo",
+          "B. Chỉ phục vụ cho việc giải trí đơn thuần",
+          "C. Không cần suy nghĩ trước khi thao tác",
+          "D. Làm cho học sinh lười suy nghĩ"
+        ],
+        ans: "A",
+        exp: "Tin học giúp phát triển năng lực tư duy sáng tạo và giải quyết vấn đề có phương pháp.",
+        diff: "Vận dụng"
+      }
+    ];
+  } else {
+    // Đạo đức & Hoạt động trải nghiệm
+    sampleTemplates = [
+      {
+        q: `Thông điệp ý nghĩa nhất mà bài học "${safeTopic}" (${safeSubject} ${safeGrade}) muốn gửi gắm là:`,
+        opts: [
+          "A. Rèn luyện phẩm chất tốt đẹp: Lễ phép, trung thực, trách nhiệm và yêu thương mọi người",
+          "B. Chỉ quan tâm đến bản thân mà không cần giúp đỡ ai",
+          "C. Không cần tuân theo nội quy trường lớp",
+          "D. Nói lời không giữ lời hứa"
+        ],
+        ans: "A",
+        exp: "Mỗi bài học Đạo đức giúp các em hoàn thiện nhân cách, trở thành con ngoan trò giỏi của trường Lạc Long Quân.",
+        diff: "Nhận biết"
+      },
+      {
+        q: `Khi gặp tình huống thực tế liên quan đến "${safeTopic}", cách xử sự văn minh và đúng đắn nhất là:`,
+        opts: [
+          "A. Bình tĩnh lắng nghe, cư xử hòa nhã, biết nói lời 'Cảm ơn' và 'Xin lỗi'",
+          "B. To tiếng tranh cãi và đổ lỗi cho người khác",
+          "C. Lờ đi như không có chuyện gì xảy ra",
+          "D. Dùng vũ lực để giải quyết mâu thuẫn"
+        ],
+        ans: "A",
+        exp: "Biết lắng nghe và chân thành xin lỗi khi có lỗi là biểu hiện của người có văn hóa và tự trọng.",
+        diff: "Thông hiểu"
+      },
+      {
+        q: `Hành động cụ thể của em ở lớp để thực hiện tốt chủ đề "${safeTopic}" là:`,
+        opts: [
+          "A. Giúp đỡ bạn cùng tiến bộ, giữ gìn vệ sinh lớp học và đoàn kết với bạn bè",
+          "B. Phân biệt đối xử và trêu chọc bạn bè",
+          "C. Không tham gia vào các hoạt động tập thể",
+          "D. Để rác bừa bãi dưới ngăn bàn"
+        ],
+        ans: "A",
+        exp: "Đoàn kết và giúp đỡ nhau trong học tập tạo nên một tập thể lớp hạnh phúc và tiến bộ.",
+        diff: "Vận dụng"
+      }
+    ];
+  }
+
+  const results = [];
+  const targetCount = Math.min(30, Math.max(1, count || 5));
+  for (let i = 0; i < targetCount; i++) {
+    const tmpl = sampleTemplates[i % sampleTemplates.length];
+    results.push({
+      id: i + 1,
+      question: `Câu ${i + 1}: ${tmpl.q}`,
+      options: tmpl.opts,
+      correctAnswer: tmpl.ans,
+      explanation: tmpl.exp,
+      difficulty: tmpl.diff,
+    });
+  }
+  return results;
+}
+
+function buildFormattedTextFromQuestions(topic: string, grade: string, subject: string, questions: any[]): string {
+  let text = `BÀI HỌC: ${topic.toUpperCase()}\nMôn: ${subject} - Cấp lớp: ${grade} (Trường Tiểu học Lạc Long Quân)\n\nDANH SÁCH CÂU HỎI & BÀI TẬP TỰ ĐỘNG BIÊN SOẠN BỞI AI:\n`;
+  questions.forEach((q, idx) => {
+    const qNum = idx + 1;
+    const diff = q.difficulty ? ` [${q.difficulty}]` : "";
+    text += `\nBài ${qNum}${diff}: ${q.question}\n`;
+    if (Array.isArray(q.options)) {
+      q.options.forEach((opt: string) => {
+        text += `  ${opt}\n`;
+      });
+    }
+    text += `=> Đáp án đúng: ${q.correctAnswer}\n`;
+    if (q.explanation) {
+      text += `=> Gợi ý & Hướng dẫn giải: ${q.explanation}\n`;
+    }
+  });
+  return text;
+}
+
+// 3.5. Smart Question Generator by AI (Topic & Grade Level)
+app.post("/api/generate-questions", async (req, res) => {
+  try {
+    const keyCheck = checkGeminiApiKey();
+    if (!keyCheck.valid) {
+      return res.status(401).json({ success: false, error: keyCheck.error });
+    }
+
+    const {
+      topic,
+      grade = "Lớp 3",
+      subject = "Toán",
+      questionCount = 5,
+      questionType = "Trắc nghiệm 4 đáp án",
+      difficulty = "Hỗn hợp phong phú",
+      curriculumBook = "Chuẩn Bộ GD&ĐT",
+      customNotes = "",
+    } = req.body;
+
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ success: false, error: "Vui lòng nhập chủ đề bài học để AI sinh câu hỏi." });
+    }
+
+    const safeCount = Math.min(30, Math.max(1, Number(questionCount) || 5));
+
+    const prompt = `Bạn là Chuyên gia Giáo dục Tiểu học và Biên soạn Đề thi Sách giáo khoa Việt Nam (Bộ GD&ĐT), thuộc Trường Tiểu học Lạc Long Quân.
+Nhiệm vụ của bạn: Tự động biên soạn một bộ CHÍNH XÁC ${safeCount} câu hỏi bài tập chất lượng cao, đúng chuẩn kiến thức và kỹ năng cho học sinh tiểu học.
+
+THÔNG TIN BÀI HỌC:
+- Môn học: ${subject}
+- Cấp lớp: ${grade}
+- Chủ đề bài học: "${topic.trim()}"
+- Số lượng câu hỏi cần tạo: ${safeCount} câu
+- Dạng câu hỏi: ${questionType}
+- Mức độ nhận thức: ${difficulty}
+- Bộ sách tham chiếu: ${curriculumBook}
+${customNotes && customNotes.trim() ? `- Ghi chú thêm từ giáo viên: ${customNotes.trim()}` : ""}
+
+QUY CHUẨN NỘI DUNG SƯ PHẠM (RẤT QUAN TRỌNG):
+1. Đúng chuẩn kiến thức và tâm lý lứa tuổi học sinh ${grade}. Từ ngữ trong sáng, chuẩn mực, giàu tính giáo dục, vui tươi, tích cực.
+2. Với môn Toán: các phép tính, phân số, hình học, số đo PHẢI chuẩn xác 100%, số liệu thực tế, không sai sót toán học.
+3. Với Tiếng Việt: các câu văn, thành ngữ, từ ngữ phải chuẩn chính tả tiếng Việt, giàu hình ảnh, nuôi dưỡng tâm hồn học sinh.
+4. Với môn Khoa học / Tự nhiên & Xã hội / Lịch sử & Địa lý: kiến thức khoa học chuẩn mực, gần gũi thực tế.
+5. Mỗi câu hỏi BẮT BUỘC có:
+   - Đề bài rõ ràng, mạch lạc, có thể kèm 1 emoji minh hoạ ngộ nghĩnh
+   - 4 phương án lựa chọn A, B, C, D rõ ràng. Vị trí đáp án đúng PHẢI xáo trộn ngẫu nhiên (không được luôn luôn là A).
+   - "correctAnswer": ghi rõ ký tự đáp án đúng ("A", "B", "C" hoặc "D")
+   - "explanation": Lời giải & Gợi ý trả lời sư phạm chi tiết từng bước, thân thiện, dễ hiểu để học sinh đọc là hiểu ngay.
+   - "difficulty": Ghi rõ "Nhận biết", "Thông hiểu", hoặc "Vận dụng".
+
+BẮT BUỘC TRẢ VỀ DUY NHẤT 1 MẢNG JSON HỢP LỆ (Không viết lời chào, không kèm text ngoài markdown):
+\`\`\`json
+[
+  {
+    "id": 1,
+    "question": "Đề bài câu hỏi...",
+    "options": [
+      "A. Phương án 1",
+      "B. Phương án 2",
+      "C. Phương án 3",
+      "D. Phương án 4"
+    ],
+    "correctAnswer": "A",
+    "explanation": "Gợi ý trả lời & lời giải chi tiết cho học sinh...",
+    "difficulty": "Nhận biết"
+  }
+]
+\`\`\``;
+
+    try {
+      const result = await callGemini([{ text: prompt }], "Bạn là Chuyên gia Giáo dục Tiểu học biên soạn câu hỏi chuẩn JSON.", {
+        temperature: 0.6,
+      });
+
+      let cleanJson = result.text.trim();
+      cleanJson = cleanJson.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+
+      const jsonMatch = cleanJson.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      let questionsData = JSON.parse(jsonMatch ? jsonMatch[0] : cleanJson);
+
+      if (!Array.isArray(questionsData) || questionsData.length === 0) {
+        questionsData = getSmartFallbackQuestions(topic, grade, subject, safeCount);
+      }
+
+      // Build textbook-style formatted text
+      const formattedText = buildFormattedTextFromQuestions(topic, grade, subject, questionsData);
+
+      return res.json({
+        success: true,
+        topic: topic.trim(),
+        grade,
+        subject,
+        questionCount: questionsData.length,
+        questions: questionsData,
+        formattedText,
+        modelUsed: result.modelUsed,
+      });
+    } catch (aiErr: any) {
+      console.warn("[generate-questions] AI call failed, using smart educational fallback:", aiErr.message || aiErr);
+      const fallbackQuestions = getSmartFallbackQuestions(topic, grade, subject, safeCount);
+      const formattedText = buildFormattedTextFromQuestions(topic, grade, subject, fallbackQuestions);
+      return res.json({
+        success: true,
+        topic: topic.trim(),
+        grade,
+        subject,
+        questionCount: fallbackQuestions.length,
+        questions: fallbackQuestions,
+        formattedText,
+        modelUsed: "smart-educational-fallback",
+      });
+    }
+  } catch (err: any) {
+    console.error("[API generate-questions error]", err);
+    res.status(500).json({ success: false, error: err.message || "Lỗi khi sinh câu hỏi bằng AI" });
   }
 });
 
@@ -964,8 +1649,16 @@ QUY TẮC NỘI DUNG BẮT BUỘC (RẤT QUAN TRỌNG):
        answers: userAnswersHistory
      }, '*');
      \`\`\`
-4. CHỈ TRẢ VỀ code HTML thuần túy, bắt đầu bằng <!DOCTYPE html>. Không bọc trong \`\`\`html \`\`\`. Không giải thích.
-5. KHÔNG LỖI JS: Mọi hàm và biến được gọi PHẢI được định nghĩa đầy đủ (tránh ReferenceError).
+4. BẮT BUỘC CÓ HIỆU ỨNG ÂM THANH VUI NHỘN (SOUND EFFECTS):
+   - Trò chơi BẮT BUỘC phát âm thanh vui nhộn cho mọi hành động tương tác của học sinh bằng cách gọi:
+     + Bắt đầu chơi: phát âm thanh khởi động playSound('start')
+     + Bấm nút / chọn phương án: phát âm thanh bong bóng lách cách playSound('click')
+     + Trả lời ĐÚNG: phát tiếng chuông leng keng vui mừng playSound('correct')
+     + Trả lời SAI: phát tiếng boing hoạt hình vui nhộn playSound('wrong')
+     + Chuỗi câu đúng liên tiếp (Streak): phát tiếng thần kỳ playSound('streak')
+     + Hoàn thành bài / Màn hình kết quả: phát nhạc chiến thắng rộn rã playSound('win') và bắn pháo hoa confetti!
+5. CHỈ TRẢ VỀ code HTML thuần túy, bắt đầu bằng <!DOCTYPE html>. Không bọc trong \`\`\`html \`\`\`. Không giải thích.
+6. KHÔNG LỖI JS: Mọi hàm và biến được gọi PHẢI được định nghĩa đầy đủ (tránh ReferenceError).
 6. ĐỘC LẬP: Mọi CSS/JS/HTML phải nằm trong cùng 1 file. ĐƯỢC PHÉP dùng các CDN:
    - Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
    - Canvas Confetti: <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
