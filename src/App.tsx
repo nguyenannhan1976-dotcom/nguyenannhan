@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   Gamepad2, 
   Sparkles, 
@@ -10,7 +10,12 @@ import {
   BarChart3, 
   Share2, 
   KeyRound, 
-  Users 
+  Users,
+  Minus,
+  Plus,
+  Clock,
+  Zap,
+  Info
 } from "lucide-react";
 import { FileUploader, FileMetadata } from "./components/FileUploader";
 import { GameSuggestions, GameSuggestionObj } from "./components/GameSuggestions";
@@ -58,6 +63,16 @@ const THEME_FONTS = [
   { id: 'Roboto', label: 'Roboto (Cơ bản)' },
 ];
 
+export const QUESTION_PRESETS = [
+  { count: 3, label: '3 câu', icon: '⚡', desc: 'Khởi động (~2-3 ph)' },
+  { count: 5, label: '5 câu', icon: '⭐', desc: 'Tiêu chuẩn (~5 ph)', recommended: true },
+  { count: 10, label: '10 câu', icon: '📚', desc: 'Luyện tập (~10 ph)' },
+  { count: 15, label: '15 câu', icon: '🏆', desc: 'Thử thách (~15 ph)' },
+  { count: 20, label: '20 câu', icon: '🌟', desc: 'Toàn diện (~20 ph)' },
+  { count: 25, label: '25 câu', icon: '🚀', desc: 'Đấu trí (~25 ph)' },
+  { count: 30, label: '30 câu (Tối đa)', icon: '👑', desc: 'Ngân hàng lớn' },
+];
+
 function App() {
   const [step, setStep] = useState(1);
   const [lessonText, setLessonText] = useState("");
@@ -68,6 +83,30 @@ function App() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [gameName, setGameName] = useState("");
   const [questionCount, setQuestionCount] = useState<number>(5);
+
+  // Tự động phân tích và đếm số lượng câu hỏi có trong tài liệu SGK
+  const detectedQuestionCount = useMemo(() => {
+    if (!lessonText || !lessonText.trim()) return 0;
+    
+    // 1. Nhận diện các bài/câu hỏi đặc trưng trong SGK: Bài 1, Bài 1.1, Bài tập 1, Câu 1, Câu hỏi 1, Luyện tập 1, Vận dụng 1, HĐ 1
+    const matches = new Set<string>();
+    const majorMatches = lessonText.match(/(?:Bài|Bài\s*tập|Câu|Câu\s*hỏi|Luyện\s*tập|Vận\s*dụng|HĐ|Hoạt\s*động)\s*\d+(?:[\.\-]\d+)?/gi);
+    if (majorMatches && majorMatches.length > 0) {
+      majorMatches.forEach(m => matches.add(m.toLowerCase().replace(/\s+/g, ' ')));
+      if (matches.size >= 1) {
+        return Math.min(30, Math.max(1, matches.size));
+      }
+    }
+
+    // 2. Nhận diện các dòng đánh số danh sách câu hỏi: "1.", "2.", "3."
+    const numberedMatches = lessonText.match(/(?:^|\n)\s*\d+[\.\)]\s+[^\n]{4,}/g);
+    if (numberedMatches && numberedMatches.length >= 2) {
+      return Math.min(30, Math.max(1, numberedMatches.length));
+    }
+
+    return 0;
+  }, [lessonText]);
+
   const [themeColor, setThemeColor] = useState('blue');
   const [themeFont, setThemeFont] = useState('Inter');
   const [useIcons, setUseIcons] = useState<boolean>(false);
@@ -566,26 +605,225 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Mục 4: Số lượng câu hỏi */}
-                    <div>
-                      <label className="flex items-center gap-2.5 text-base font-bold tracking-tight mb-2">
-                        <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center text-xs font-black shadow-xs">4</span>
-                        <span className="text-slate-900 font-black">
-                          Số lượng câu hỏi bài tập đưa vào game <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent font-extrabold">(Tối ưu SGK)</span>
-                        </span>
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <input 
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={questionCount}
-                          onChange={(e) => setQuestionCount(Math.min(30, Math.max(1, parseInt(e.target.value) || 5)))}
-                          className="w-24 p-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none font-bold text-center text-sm"
-                        />
-                        <span className="text-xs font-medium text-slate-500">
-                          (Ưu tiên lấy đúng số lượng câu hỏi từ SGK đã trích xuất)
-                        </span>
+                    {/* Mục 4: Số lượng câu hỏi bài tập có thể tạo */}
+                    <div className="bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-amber-100/50 p-4 sm:p-5 rounded-2xl border-2 border-amber-200/90 shadow-xs space-y-4">
+                      {/* Tiêu đề & Thông số tổng quan */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <label className="flex items-center gap-2.5 text-base font-bold tracking-tight">
+                          <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0">4</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-slate-900 font-black">
+                              Số lượng câu hỏi bài tập có thể tạo
+                            </span>
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold shadow-2xs">
+                              Hỗ trợ 1 - 30 câu
+                            </span>
+                          </div>
+                        </label>
+                        
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900 bg-white/90 px-3 py-1.5 rounded-xl border border-amber-200 shadow-2xs self-start sm:self-auto">
+                          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Dự kiến: ~{questionCount * 1} - {Math.round(questionCount * 1.5)} phút chơi</span>
+                        </div>
+                      </div>
+
+                      {/* Bảng điều khiển chọn số lượng: Stepper + Slider */}
+                      <div className="bg-white/95 backdrop-blur-xs rounded-xl p-3.5 sm:p-4 border border-amber-200 shadow-2xs space-y-3.5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          {/* Stepper (- / +) */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black text-slate-700 uppercase tracking-wide">Số câu muốn tạo:</span>
+                            <div className="flex items-center border-2 border-amber-300 rounded-xl overflow-hidden bg-white shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => setQuestionCount(prev => Math.max(1, prev - 1))}
+                                disabled={questionCount <= 1}
+                                className="w-9 h-9 flex items-center justify-center text-amber-700 hover:bg-amber-100 active:bg-amber-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                title="Giảm 1 câu"
+                              >
+                                <Minus className="w-4 h-4 stroke-[3]" />
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                max={30}
+                                value={questionCount}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val)) {
+                                    setQuestionCount(Math.min(30, Math.max(1, val)));
+                                  }
+                                }}
+                                className="w-16 h-9 text-center font-black text-slate-900 text-lg bg-amber-50/40 focus:bg-white outline-none border-x-2 border-amber-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setQuestionCount(prev => Math.min(30, prev + 1))}
+                                disabled={questionCount >= 30}
+                                className="w-9 h-9 flex items-center justify-center text-amber-700 hover:bg-amber-100 active:bg-amber-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                title="Tăng 1 câu"
+                              >
+                                <Plus className="w-4 h-4 stroke-[3]" />
+                              </button>
+                            </div>
+                            <span className="text-sm font-black text-amber-800">câu hỏi</span>
+                          </div>
+
+                          {/* Nhãn gợi ý sư phạm */}
+                          <div className="text-xs font-bold px-3 py-1 rounded-lg bg-amber-50 border border-amber-200">
+                            {questionCount <= 3 && <span className="text-sky-700">⚡ Khởi động đầu tiết, tạo hứng thú</span>}
+                            {questionCount >= 4 && questionCount <= 7 && <span className="text-emerald-700">⭐ Độ dài lý tưởng nhất cho Tiểu học</span>}
+                            {questionCount >= 8 && questionCount <= 14 && <span className="text-amber-800">📚 Luyện tập củng cố & khắc sâu kiến thức</span>}
+                            {questionCount >= 15 && questionCount <= 22 && <span className="text-purple-700">🏆 Thử thách thi đua / Đấu trí nhóm</span>}
+                            {questionCount >= 23 && <span className="text-rose-700">👑 Ngân hàng câu hỏi toàn diện cả bài</span>}
+                          </div>
+                        </div>
+
+                        {/* Thanh trượt Range Slider */}
+                        <div className="space-y-1.5 pt-1">
+                          <input
+                            type="range"
+                            min={1}
+                            max={30}
+                            value={questionCount}
+                            onChange={(e) => setQuestionCount(parseInt(e.target.value))}
+                            className="w-full h-2.5 bg-amber-100 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-600 focus:outline-none"
+                          />
+                          <div className="flex justify-between text-[10px] font-black text-slate-400 px-0.5 select-none">
+                            <span className="text-amber-800">1 câu</span>
+                            <span>5 câu</span>
+                            <span>10 câu</span>
+                            <span>15 câu</span>
+                            <span>20 câu</span>
+                            <span>25 câu</span>
+                            <span className="text-amber-800">30 câu (Tối đa)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Các mốc số lượng câu hỏi thông dụng */}
+                      <div>
+                        <div className="text-xs font-black text-slate-700 mb-2 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                            Gợi ý chọn nhanh số lượng câu hỏi:
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
+                            (Bấm chọn để áp dụng ngay)
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                          {QUESTION_PRESETS.map((p) => {
+                            const isSelected = questionCount === p.count;
+                            return (
+                              <button
+                                key={p.count}
+                                type="button"
+                                onClick={() => setQuestionCount(p.count)}
+                                className={cn(
+                                  "p-2 sm:p-2.5 rounded-xl text-left border-2 transition-all cursor-pointer flex flex-col justify-between relative",
+                                  isSelected
+                                    ? "bg-gradient-to-tr from-amber-500 to-orange-500 text-white border-amber-600 shadow-md scale-102 font-bold"
+                                    : "bg-white text-slate-700 border-amber-200/80 hover:border-amber-400 hover:bg-amber-50/60"
+                                )}
+                              >
+                                {p.recommended && !isSelected && (
+                                  <span className="absolute -top-2 -right-1 px-1.5 py-0.2 bg-emerald-500 text-white text-[9px] font-black rounded-full shadow-2xs">
+                                    Chuẩn
+                                  </span>
+                                )}
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="text-xs font-black flex items-center gap-1">
+                                    <span>{p.icon}</span>
+                                    <span>{p.label}</span>
+                                  </span>
+                                  {isSelected && <span className="text-xs font-black">✓</span>}
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] mt-1 leading-tight line-clamp-1",
+                                  isSelected ? "text-amber-100" : "text-slate-500"
+                                )}>
+                                  {p.desc}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Tự động phát hiện câu hỏi trong SGK (nếu có tài liệu) */}
+                      {detectedQuestionCount > 0 && (
+                        <div className="bg-gradient-to-r from-sky-50 via-indigo-50 to-blue-50 border-2 border-indigo-200/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-2xl shrink-0">🎯</span>
+                            <div>
+                              <p className="text-xs font-black text-slate-900">
+                                Phát hiện tài liệu SGK có khoảng <span className="text-indigo-600 font-black underline">{detectedQuestionCount} câu hỏi / bài tập</span>
+                              </p>
+                              <p className="text-[11px] text-slate-600 mt-0.5">
+                                Hệ thống sẽ ưu tiên trích xuất chính xác {detectedQuestionCount} bài tập này từ nội dung SGK đã quét.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuestionCount(detectedQuestionCount);
+                              showToast(`Đã đặt đúng ${detectedQuestionCount} câu hỏi theo tài liệu SGK! 🎯`, "success");
+                            }}
+                            className={cn(
+                              "px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center gap-1.5",
+                              questionCount === detectedQuestionCount
+                                ? "bg-emerald-600 text-white ring-2 ring-emerald-300 cursor-default"
+                                : "bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white shadow-indigo-200"
+                            )}
+                          >
+                            {questionCount === detectedQuestionCount ? (
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Đang dùng đúng {detectedQuestionCount} câu SGK</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>⚡ Dùng đúng {detectedQuestionCount} câu SGK</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Hướng dẫn sư phạm & Khả năng của hệ thống */}
+                      <div className="bg-white/80 rounded-xl p-3 border border-amber-200/70 text-xs text-slate-600 space-y-2">
+                        <div className="flex items-center gap-1.5 font-black text-amber-900">
+                          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Quy chuẩn số lượng câu hỏi tại Trường Tiểu học Lạc Long Quân:</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-600">
+                          <div className="flex items-start gap-1.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                            <span className="text-amber-500 font-black text-sm leading-none">•</span>
+                            <div>
+                              <strong className="text-slate-800">Khả năng tạo:</strong> Hỗ trợ từ <b>1 đến tối đa 30 câu hỏi</b> trong mỗi trò chơi, đáp ứng mọi quy mô tiết dạy.
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                            <span className="text-amber-500 font-black text-sm leading-none">•</span>
+                            <div>
+                              <strong className="text-slate-800">Trích xuất bài tập SGK:</strong> AI tự động chuyển hóa các câu hỏi tự luận, trắc nghiệm từ ảnh chụp SGK thành câu hỏi tương tác 60 FPS.
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                            <span className="text-amber-500 font-black text-sm leading-none">•</span>
+                            <div>
+                              <strong className="text-slate-800">Đầy đủ gợi ý giải thích:</strong> Mỗi câu hỏi đều có đáp án chuẩn, chỉ ra câu sai và hướng dẫn chi tiết từng bước cho học sinh.
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                            <span className="text-amber-500 font-black text-sm leading-none">•</span>
+                            <div>
+                              <strong className="text-slate-800">Khuyên dùng Tiểu học:</strong> Gói <b>5 - 10 câu</b> giúp học sinh hoàn thành trong 5 - 10 phút, duy trì tối đa năng lượng học tập.
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
